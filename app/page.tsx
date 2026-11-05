@@ -6,7 +6,7 @@ export default function Home() {
     <div className="space-y-8">
       <section className="rounded-2xl border border-slate-200 bg-slate-900 px-6 py-12 text-slate-50 shadow-sm sm:px-10">
         <p className="mb-3 inline-block rounded-full bg-amber-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
-          Prototype med demodata
+          Prototype med ekte JDD-produkter
         </p>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
           Finn riktig utstyr til jobben
@@ -39,12 +39,12 @@ export default function Home() {
 
         <Section
           title="Hva du får"
-          description="Resultatet forklares tydelig og bygger på registrerte demodata."
+          description="Resultatet bruker et kuratert utvalg arbeidslys fra JDD Utstyr."
         >
           <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
             <li>Én hovedanbefaling med begrunnelse.</li>
             <li>Alternative valg for ulike behov.</li>
-            <li>Kompatibelt tilbehør og pakketilbud.</li>
+            <li>Direktelenke til produktdetaljene hos JDD Utstyr.</li>
           </ul>
         </Section>
 
@@ -53,7 +53,7 @@ export default function Home() {
           description="Datakilde og anbefalingslogikk er adskilt fra UI for enkel utvidelse."
         >
           <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
-            <li>Demodata i eget datalag.</li>
+            <li>Et utvalg ekte produkter i eget datalag.</li>
             <li>Forberedt for fremtidig Shopify-kobling.</li>
             <li>Kan utvides med AI-assistert veiledning senere.</li>
           </ul>
@@ -62,12 +62,12 @@ export default function Home() {
 
       <Section
         eyebrow="Viktig"
-        title="All informasjon i denne prototypen er fiktiv"
-        description="Produkter, priser, spesifikasjoner og kompatibilitet er demodata laget for å demonstrere konseptet."
+        title="Anbefalingene er foreløpige"
+        description="Produktinformasjon og priser er hentet fra JDD Utstyr, men kan endres. Utvalget og anbefalingsmerkingen er begrenset til prototypeformål."
       >
         <p className="text-sm text-slate-600">
-          Løsningen er laget som et utgangspunkt for JDD ProduktGuide og kan senere
-          kobles til ekte produktdata.
+          Kontroller oppdaterte priser, spesifikasjoner og kompatibilitet på
+          produktsiden hos JDD Utstyr før kjøp.
         </p>
       </Section>
     </div>

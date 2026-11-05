@@ -11,8 +11,9 @@ export default function AboutPage() {
       >
         <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
           <li>Trinnvis guide med fremdrift, lagring av svar og redigering underveis.</li>
-          <li>Regelbasert og forklarbar anbefalingsmotor basert på demodata.</li>
-          <li>Kompatibilitetsstyrte tilbehørsforslag og eksempel på pakketilbud.</li>
+          <li>Regelbaserte anbefalinger fra et utvalg ekte JDD-arbeidslys.</li>
+          <li>Produktdetaljer og lenker til JDDs nettbutikk.</li>
+          <li>Kompatibilitet og tilbehør er ikke verifisert i dette utvalget.</li>
           <li>Arkitektur for fremtidig bytte av datakilde (f.eks. Shopify).</li>
         </ul>
       </Section>
@@ -22,7 +23,8 @@ export default function AboutPage() {
         description="Mulige neste steg etter prototypen."
       >
         <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
-          <li>Bytte demodata med ekte produktkatalog via repository-laget.</li>
+          <li>Utvide produktutvalget og registrere verifiserte produktregler.</li>
+          <li>Legge til verifisert kompatibilitet og tilbehør.</li>
           <li>Legge til administrasjon av spørsmål, vekter og produktregler.</li>
           <li>Utvide med AI-assistert teksthjelp uten å overstyre faktiske produktdata.</li>
         </ul>

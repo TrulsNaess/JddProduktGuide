@@ -1,4 +1,4 @@
-import { demoProducts } from "@/src/data/products";
+import { jddProducts } from "@/src/data/products";
 import { Product } from "@/src/types/domain";
 
 export interface ProductRepository {
@@ -9,26 +9,26 @@ export interface ProductRepository {
   getBySlug(slug: string): Product | undefined;
 }
 
-class DemoProductRepository implements ProductRepository {
+class JddProductRepository implements ProductRepository {
   getAll(): Product[] {
-    return demoProducts;
+    return jddProducts;
   }
 
   getMainProducts(): Product[] {
-    return demoProducts.filter((product) => product.kind === "main");
+    return jddProducts.filter((product) => product.kind === "main");
   }
 
   getAccessories(): Product[] {
-    return demoProducts.filter((product) => product.kind === "accessory");
+    return jddProducts.filter((product) => product.kind === "accessory");
   }
 
   getById(id: string): Product | undefined {
-    return demoProducts.find((product) => product.id === id);
+    return jddProducts.find((product) => product.id === id);
   }
 
   getBySlug(slug: string): Product | undefined {
-    return demoProducts.find((product) => product.slug === slug);
+    return jddProducts.find((product) => product.slug === slug);
   }
 }
 
-export const productRepository: ProductRepository = new DemoProductRepository();
+export const productRepository: ProductRepository = new JddProductRepository();

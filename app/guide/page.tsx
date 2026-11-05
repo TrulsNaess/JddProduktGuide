@@ -156,7 +156,7 @@ export default function GuidePage() {
       </div>
 
       <p className="text-center text-xs text-slate-500">
-        Dette er en prototype med demodata. Resultatet er kun illustrativt.
+        Prototypen bruker et kuratert utvalg ekte JDD-produkter. Anbefalingsmerkingen er foreløpig.
       </p>
     </div>
   );

@@ -43,6 +43,8 @@ export interface Product {
   id: string;
   slug: string;
   name: string;
+  sku: string;
+  sourceUrl: string;
   category: string;
   kind: "main" | "accessory";
   shortDescription: string;
@@ -50,7 +52,7 @@ export interface Product {
   image: string;
   priceNok: number;
   isDemo: boolean;
-  demoNotice: string;
+  dataNotice: string;
   useCases: GuideUseCase[];
   industries: string[];
   environments: Environment[];

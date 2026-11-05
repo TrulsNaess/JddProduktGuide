@@ -55,7 +55,7 @@ export function recommendProducts(
           matchedCriteria.push("Bruksområde");
         } else {
           unmetAbsoluteRequirements.push(
-            "Produktet er ikke registrert for valgt bruksområde i demodata.",
+            "Produktet er ikke registrert for valgt bruksområde i produktutvalget.",
           );
         }
       }
@@ -88,7 +88,7 @@ export function recommendProducts(
           matchedCriteria.push("Bruksintensitet");
         } else {
           limitations.push(
-            "Bruksintensitet er delvis avvikende fra valgt nivå i demodata.",
+            "Bruksintensitet er ikke registrert som en tydelig match for produktet.",
           );
         }
       }
@@ -114,13 +114,13 @@ export function recommendProducts(
           reasons.push("Ligger innenfor oppgitt budsjett.");
           matchedCriteria.push("Budsjett");
         } else {
-          limitations.push("Ligger over oppgitt budsjett i demodata.");
+          limitations.push("Ligger over oppgitt budsjett.");
         }
       }
 
       if (!reasons.length) {
         reasons.push(
-          "Grunnmatch basert på tilgjengelige demodata. Legg til flere svar for mer presis anbefaling.",
+          "Grunnmatch basert på tilgjengelige produktdata. Legg til flere svar for mer presis anbefaling.",
         );
       }
 

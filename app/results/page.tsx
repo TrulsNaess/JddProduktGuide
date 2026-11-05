@@ -70,7 +70,7 @@ export default function ResultsPage() {
             href="/products"
             className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-400"
           >
-            Se alle demoprodukter
+            Se alle produkter
           </Link>
         </div>
       </Section>
@@ -80,10 +80,11 @@ export default function ResultsPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-        <p className="font-semibold">Demodata</p>
+        <p className="font-semibold">Et utvalg ekte JDD-produkter</p>
         <p>
-          Produkter, spesifikasjoner, priser og kompatibilitet på denne siden er
-          fiktive eksempeldata for prototypeformål.
+          Priser og spesifikasjoner er hentet fra JDD Utstyr og kan endres.
+          Anbefalingsmerkingen er foreløpig prototypedata, og kompatibilitet må
+          bekreftes hos JDD Utstyr.
         </p>
       </div>
 
@@ -121,22 +122,28 @@ export default function ResultsPage() {
       </Section>
 
       <Section
-        title="Gjør løsningen komplett"
-        description="Tilbehør hentes fra registrerte kompatibilitetsrelasjoner i demodata."
+        title="Tilbehør"
+        description="Tilbehør med registrert kompatibilitet for anbefalingen vises her."
       >
         <div className="grid gap-4 lg:grid-cols-2">
-          {accessorySuggestions.map((suggestion) => (
-            <AccessoryCard
-              key={suggestion.product.id}
-              suggestion={suggestion}
-              selected={selectedAccessoryIds.includes(suggestion.product.id)}
-              onToggle={toggleAccessory}
-            />
-          ))}
+          {accessorySuggestions.length > 0 ? (
+            accessorySuggestions.map((suggestion) => (
+              <AccessoryCard
+                key={suggestion.product.id}
+                suggestion={suggestion}
+                selected={selectedAccessoryIds.includes(suggestion.product.id)}
+                onToggle={toggleAccessory}
+              />
+            ))
+          ) : (
+            <p className="text-sm text-slate-600">
+              Ingen registrerte tilbehørsforslag for dette produktet.
+            </p>
+          )}
         </div>
       </Section>
 
-      {packageSummary ? (
+      {packageSummary && selectedAccessories.length > 0 ? (
         <Section
           title="Eksempel på pakketilbud"
           description="Totalen oppdateres når du legger til eller fjerner kompatibelt tilbehør."

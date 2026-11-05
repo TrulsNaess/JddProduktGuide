@@ -33,8 +33,7 @@ export function getAccessorySuggestions(
         product: accessory,
         relationship: relation.relationship,
         status: relation.status,
-        reason:
-          relation.note ?? "Relevans er hentet fra registrert kompatibilitet i demodata.",
+        reason: relation.note ?? "Relevans er hentet fra registrert kompatibilitet.",
       } as AccessorySuggestion;
     })
     .filter((item): item is AccessorySuggestion => item !== null)

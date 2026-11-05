@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Product } from "@/src/types/domain";
 import { formatNok } from "@/src/services/format/price";
 import { Tag } from "@/src/components/ui/tag";
@@ -11,8 +12,14 @@ interface ProductCardProps {
 export function ProductCard({ product, label }: ProductCardProps) {
   return (
     <article className="flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-500">
-        Demobilde
+      <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+        <Image
+          src={product.image}
+          alt={product.name}
+          fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+          className="object-contain p-3"
+        />
       </div>
       <div className="mb-2 flex items-start justify-between gap-3">
         <h3 className="text-lg font-semibold text-slate-900">{product.name}</h3>
@@ -28,7 +35,7 @@ export function ProductCard({ product, label }: ProductCardProps) {
         ))}
       </ul>
       <div className="mt-auto flex items-center justify-between">
-        <Tag text="Demodata" tone="neutral" />
+        <Tag text={product.isDemo ? "Demodata" : "JDD Utstyr"} tone="neutral" />
         <Link
           href={`/products/${product.slug}`}
           className="text-sm font-semibold text-slate-900 hover:text-amber-600"
