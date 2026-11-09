@@ -1,366 +1,471 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ProductCard } from "@/src/components/products/product-card";
-import { getAccessorySuggestions } from "@/src/services/compatibility/accessories";
+import { loadGuideAnswers, saveGuideAnswers } from "@/src/services/guide/session";
 import { productRepository } from "@/src/services/products/repository";
+import { GuideAnswers, GuideUseCase, Priority, ValuePreference } from "@/src/types/domain";
 
-const products = productRepository.getAll();
-const accessories = productRepository.getAccessories();
-const steps = ["Kategori", "Produkt", "Kjøretøy", "Resultat"];
-const vehicleTypes = ["Bil", "Traktor", "Tilhenger", "ATV / UTV", "Anleggsmaskin", "Annet"];
-
-function mainCategory(category: string) {
-    return category.split("·")[0].trim();
-}
-
-const categories = [...new Set(products.map((product) => mainCategory(product.category)))]
-    .sort((a, b) => a.localeCompare(b, "nb"));
+const products = productRepository.getMainProducts();
+const steps = ["Kategori", "Behov", "Kontekst", "Prioritering"];
 
 const field = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2";
 const primary =
-    "rounded-lg bg-orange-700 px-4 py-2 font-semibold text-white hover:bg-orange-800 disabled:opacity-50";
+  "rounded-lg bg-orange-700 px-4 py-2 font-semibold text-white hover:bg-orange-800 disabled:opacity-50";
 const secondary =
-    "rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold hover:bg-slate-50";
+  "rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold hover:bg-slate-50";
 
-type ChatMessage = {
-    question: string;
-    answer: string;
-};
+function mainCategory(category: string) {
+  return category.split("·")[0].trim();
+}
+
+function contextModeForCategory(category: string): "vehicle" | "equipment" | "worksite" {
+  const value = category.toLocaleLowerCase("nb");
+  if (/(kjøretøy|bil|traktor|tilhenger|kamera|arbeidslys|ryggekamera)/.test(value)) {
+    return "vehicle";
+  }
+  if (/(maskin|verksted|verktøy|hydraul|generator)/.test(value)) {
+    return "equipment";
+  }
+  return "worksite";
+}
+
+const categories = [...new Set(products.map((product) => mainCategory(product.category)))].sort((a, b) =>
+  a.localeCompare(b, "nb"),
+);
+
+const useCases: Array<{ value: GuideUseCase; label: string }> = [
+  { value: "maintenance", label: "Vedlikehold og reparasjon" },
+  { value: "construction", label: "Bygg og anlegg" },
+  { value: "transport", label: "Transport og håndtering" },
+  { value: "agriculture", label: "Landbruk og gårdsdrift" },
+  { value: "parks", label: "Park og uteområder" },
+  { value: "workshop", label: "Verksted og bil" },
+  { value: "other", label: "Annet" },
+];
+
+const priorities: Array<{ value: Priority; label: string }> = [
+  { value: "price", label: "Lavest mulig pris" },
+  { value: "quality", label: "Best mulig kvalitet" },
+  { value: "capacity", label: "Høy kapasitet og ytelse" },
+  { value: "flexibility", label: "Fleksibilitet" },
+  { value: "durability", label: "Lang levetid" },
+];
+
+const valuePreferences: Array<{ value: ValuePreference; label: string; description: string }> = [
+  {
+    value: "best",
+    label: "Best mulig match",
+    description: "Vekter ytelse, robusthet og behovsmatch høyest.",
+  },
+  {
+    value: "cheapest",
+    label: "Billigste relevante",
+    description: "Prioriterer lavere pris når flere produkter passer.",
+  },
+  {
+    value: "balanced",
+    label: "Balansert",
+    description: "Kombinerer pris og kvalitet.",
+  },
+];
+
+interface IntentApiResponse {
+  summary: string;
+  suggestedUseCase?: GuideUseCase;
+  suggestedValuePreference?: ValuePreference;
+  keywords: string[];
+  confidence: "low" | "medium" | "high";
+  source: "heuristic" | "openai";
+}
 
 export default function GuidePage() {
-    const [step, setStep] = useState(0);
-    const [category, setCategory] = useState("");
-    const [query, setQuery] = useState("");
-    const [productId, setProductId] = useState("");
-    const [vehicleType, setVehicleType] = useState("");
-    const [model, setModel] = useState("");
-    const [year, setYear] = useState("");
-    const [draft, setDraft] = useState("");
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const chatLogRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const stored = loadGuideAnswers();
 
-    useEffect(() => {
-        const chatLog = chatLogRef.current;
+  const [step, setStep] = useState(0);
+  const [category, setCategory] = useState(stored.categoryIntent ?? "");
+  const [searchText, setSearchText] = useState(stored.productIntentText ?? "");
+  const [selectedProductId, setSelectedProductId] = useState(stored.preferredProductId ?? "");
+  const [useCase, setUseCase] = useState<GuideUseCase | "">(stored.useCase ?? "");
+  const [contextDetails, setContextDetails] = useState(stored.contextDetails ?? "");
+  const [valuePreference, setValuePreference] = useState<ValuePreference>(
+    stored.valuePreference ?? "balanced",
+  );
+  const [priority, setPriority] = useState<Priority | "">(stored.priority ?? "");
+  const [budgetNok, setBudgetNok] = useState<string>(
+    stored.budgetNok ? String(stored.budgetNok) : "",
+  );
+  const [specialRequirements, setSpecialRequirements] = useState(stored.specialRequirements ?? "");
+  const [intentSuggestion, setIntentSuggestion] = useState<IntentApiResponse | null>(null);
+  const [isAnalysing, setIsAnalysing] = useState(false);
 
-        if (chatLog) {
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-    }, [messages]);
+  const contextMode = category ? contextModeForCategory(category) : "worksite";
 
-    const product = products.find((item) => item.id === productId);
-    const search = query.trim().toLocaleLowerCase("nb");
-    const matches = products
-        .filter((item) => mainCategory(item.category) === category)
-        .filter((item) =>
-            `${item.name} ${item.sku} ${item.category}`.toLocaleLowerCase("nb").includes(search),
-        )
-        .sort((a, b) => a.name.localeCompare(b.name, "nb"));
+  const candidates = useMemo(() => {
+    const query = searchText.trim().toLocaleLowerCase("nb");
 
-    const vehicle = vehicleType
-        ? [vehicleType, model.trim(), year].filter(Boolean).join(" · ")
-        : "";
+    return products
+      .filter((product) => (category ? mainCategory(product.category) === category : true))
+      .filter((product) => {
+        if (!query) return true;
 
-    const suggestions = product ? getAccessorySuggestions(product, accessories) : [];
+        return `${product.name} ${product.sku} ${product.shortDescription} ${product.category}`
+          .toLocaleLowerCase("nb")
+          .includes(query);
+      })
+      .slice(0, 12);
+  }, [category, searchText]);
 
-    const nextDisabled =
-        (step === 0 && !category) ||
-        (step === 1 && !product) ||
-        (step === 2 && Boolean(vehicleType && year && year.length !== 4));
+  const selectedProduct = products.find((product) => product.id === selectedProductId);
 
-    function changeCategory(value: string) {
-        setCategory(value);
-        setProductId("");
-        setQuery("");
+  const canNext =
+    (step === 0 && !!category) ||
+    (step === 1 && searchText.trim().length >= 2) ||
+    (step === 2 && !!useCase) ||
+    step === 3;
+
+  function persistAndGoToResults() {
+    const answers: GuideAnswers = {
+      categoryIntent: category,
+      productIntentText: searchText.trim(),
+      preferredProductId: selectedProductId || undefined,
+      contextMode,
+      contextDetails: contextDetails.trim() || undefined,
+      useCase: useCase || undefined,
+      valuePreference,
+      priority: priority || undefined,
+      budgetNok: budgetNok ? Number(budgetNok) : undefined,
+      specialRequirements: specialRequirements.trim() || undefined,
+    };
+
+    saveGuideAnswers(answers);
+    router.push("/results");
+  }
+
+  async function analyseWithAi() {
+    if (!searchText.trim()) return;
+
+    setIsAnalysing(true);
+    try {
+      const response = await fetch("/api/guide-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: searchText.trim() }),
+      });
+
+      if (!response.ok) return;
+      const data = (await response.json()) as IntentApiResponse;
+      setIntentSuggestion(data);
+
+      if (data.suggestedUseCase) {
+        setUseCase(data.suggestedUseCase);
+      }
+      if (data.suggestedValuePreference) {
+        setValuePreference(data.suggestedValuePreference);
+      }
+    } finally {
+      setIsAnalysing(false);
     }
+  }
 
-    function changeVehicleType(value: string) {
-        setVehicleType(value);
-        setModel("");
-        setYear("");
-    }
+  return (
+    <section className="mx-auto max-w-6xl text-slate-900">
+      <p className="mb-1 text-sm font-semibold text-orange-800">Produktguide</p>
+      <h1 className="text-3xl font-bold tracking-tight">Finn riktig produkt når du er usikker</h1>
+      <p className="mt-2 text-slate-600">
+        Guiden hjelper deg med å beskrive behovet ditt, og rangerer relevante produkter i stedet
+        for at du må velge eksakt modell med en gang.
+      </p>
 
-    function sendMessage(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-
-        const question = draft.trim();
-        if (!question) return;
-
-        let answer = "Velg først en kategori, for eksempel Arbeidslys eller Ryggekamera.";
-
-        if (product && vehicle) {
-            answer = `Passform for ${product.name} på ${vehicle} må sjekkes. Under «Sjekk kompatibilitet» på resultatsiden finner du produktets spesifikasjoner og eventuelt registrert tilbehør.`;
-        } else if (product) {
-            answer = `Du har valgt ${product.name}. Oppgi gjerne kjøretøy, merke, modell og årsmodell i guiden. På resultatsiden finner du produktopplysningene du kan sammenligne med kjøretøyet ditt.`;
-        } else if (category) {
-            answer = `Du har valgt ${category}. Søk etter produktnavn, varenummer eller underkategori i produktsteget.`;
-        }
-
-        setMessages((previous) => [...previous, { question, answer }]);
-        setDraft("");
-    }
-
-    return (
-        <section className="mx-auto max-w-5xl text-slate-900">
-            <p className="mb-1 text-sm font-semibold text-orange-800">Produktguide</p>
-            <h1 className="text-3xl font-bold tracking-tight">Finn riktig utstyr</h1>
-            <p className="mt-2 text-slate-600">
-                Velg hva du ser etter, så hjelper guiden deg å finne fram i katalogen.
-            </p>
-
-            <ol
-                aria-label="Fremdrift"
-                className="my-6 grid grid-cols-4 rounded-xl bg-slate-200 p-4 text-center text-xs sm:text-sm"
+      <ol
+        aria-label="Fremdrift"
+        className="my-6 grid grid-cols-4 rounded-xl bg-slate-200 p-4 text-center text-xs sm:text-sm"
+      >
+        {steps.map((label, index) => (
+          <li key={label} aria-current={step === index ? "step" : undefined}>
+            <span
+              className={`mx-auto mb-2 grid h-8 w-8 place-items-center rounded-full font-bold ${
+                step === index ? "bg-orange-700 text-white" : "bg-white"
+              }`}
             >
-                {steps.map((label, index) => (
-                    <li key={label} aria-current={step === index ? "step" : undefined}>
-                        <span
-                            className={`mx-auto mb-2 grid h-8 w-8 place-items-center rounded-full font-bold ${step === index ? "bg-orange-700 text-white" : "bg-white"
-                                }`}
-                        >
-                            {index < step ? "✓" : index + 1}
-                        </span>
-                        {label}
-                    </li>
+              {index < step ? "✓" : index + 1}
+            </span>
+            {label}
+          </li>
+        ))}
+      </ol>
+
+      <div className="grid overflow-hidden rounded-2xl border border-slate-200 bg-white md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="p-5 sm:p-8">
+          {step === 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold">Hvilken produktkategori passer best?</h2>
+              <p className="text-sm text-slate-600">
+                Velg overordnet type. Du velger ikke endelig produkt enda.
+              </p>
+              <select
+                className={field}
+                value={category}
+                onChange={(event) => {
+                  setCategory(event.target.value);
+                  setSelectedProductId("");
+                }}
+              >
+                <option value="">Velg kategori</option>
+                {categories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
-            </ol>
-
-            <div className="grid overflow-hidden rounded-2xl border border-slate-200 bg-white md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                <div className="p-5 sm:p-8">
-                    {step === 0 && (
-                        <label className="block">
-                            <span className="mb-2 block text-xl font-bold">Hva ser du etter?</span>
-                            <select
-                                className={field}
-                                value={category}
-                                onChange={(event) => changeCategory(event.target.value)}
-                            >
-                                <option value="">Velg kategori</option>
-                                {categories.map((item) => (
-                                    <option key={item}>{item}</option>
-                                ))}
-                            </select>
-                        </label>
-                    )}
-
-                    {step === 1 && (
-                        <div className="space-y-4">
-                            <h2 className="text-xl font-bold">Hvilket produkt ser du etter?</h2>
-                            <label className="block text-sm font-medium">
-                                Søk i {category}
-                                <input
-                                    className={field}
-                                    type="search"
-                                    placeholder="Produktnavn, varenummer eller underkategori"
-                                    value={query}
-                                    onChange={(event) => {
-                                        setQuery(event.target.value);
-                                        setProductId("");
-                                    }}
-                                />
-                            </label>
-
-                            {matches.length > 0 ? (
-                                <label className="block text-sm font-medium">
-                                    Velg produkt
-                                    <select
-                                        className={field}
-                                        value={productId}
-                                        onChange={(event) => setProductId(event.target.value)}
-                                    >
-                                        <option value="">Velg blant {matches.length} produkter</option>
-                                        {matches.map((item) => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.name} · {item.sku}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            ) : (
-                                <p role="status" className="text-sm text-slate-600">
-                                    Ingen produkter matcher søket.
-                                </p>
-                            )}
-                        </div>
-                    )}
-
-                    {step === 2 && (
-                        <div className="space-y-4">
-                            <h2 className="text-xl font-bold">Hva skal produktet brukes på?</h2>
-                            <p className="text-sm text-slate-600">
-                                Gå rett til resultatet hvis kjøretøy ikke er relevant.
-                            </p>
-
-                            <label className="block text-sm font-medium">
-                                Type kjøretøy
-                                <select
-                                    className={field}
-                                    value={vehicleType}
-                                    onChange={(event) => changeVehicleType(event.target.value)}
-                                >
-                                    <option value="">Velg type (valgfritt)</option>
-                                    {vehicleTypes.map((type) => (
-                                        <option key={type}>{type}</option>
-                                    ))}
-                                </select>
-                            </label>
-
-                            {vehicleType && (
-                                <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-                                    <label className="block text-sm font-medium">
-                                        Merke og modell
-                                        <input
-                                            className={field}
-                                            value={model}
-                                            placeholder="F.eks. John Deere 6330"
-                                            onChange={(event) => setModel(event.target.value)}
-                                        />
-                                    </label>
-                                    <label className="block text-sm font-medium">
-                                        Årsmodell
-                                        <input
-                                            className={field}
-                                            inputMode="numeric"
-                                            value={year}
-                                            placeholder="F.eks. 2010"
-                                            onChange={(event) => setYear(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                                        />
-                                    </label>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {step === 3 && product && (
-                        <div className="space-y-4">
-                            <h2 className="text-xl font-bold">Produktet du valgte</h2>
-                            <ProductCard product={product} />
-
-                            <details className="rounded-lg border border-slate-200 p-4">
-                                <summary className="cursor-pointer font-semibold">Sjekk kompatibilitet</summary>
-                                <p className="mt-3 text-sm text-slate-600">
-                                    {vehicle
-                                        ? `Passform for ${vehicle} må sjekkes. Sammenlign opplysningene nedenfor med kjøretøyet ditt.`
-                                        : "Sammenlign produktopplysningene med kjøretøyet eller utstyret du skal bruke."}
-                                </p>
-
-                                <dl className="mt-3 divide-y divide-slate-200 text-sm">
-                                    {product.specifications.map(({ name, value, unit }, index) => (
-                                        <div key={`${name}-${index}`} className="flex justify-between gap-3 py-2">
-                                            <dt>{name}</dt>
-                                            <dd className="text-right font-medium">
-                                                {value}{unit ? ` ${unit}` : ""}
-                                            </dd>
-                                        </div>
-                                    ))}
-                                </dl>
-
-                                {product.limitations.length > 0 && (
-                                    <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-                                        {product.limitations.map((note) => <li key={note}>{note}</li>)}
-                                    </ul>
-                                )}
-
-                                {suggestions.length > 0 && (
-                                    <div className="mt-4">
-                                        <h3 className="font-semibold">Registrert tilbehør</h3>
-                                        <ul className="mt-2 space-y-2 text-sm">
-                                            {suggestions.map(({ product: item, status, reason }) => (
-                                                <li key={item.id}>
-                                                    <Link href={`/products/${item.slug}`} className="font-medium underline">
-                                                        {item.name}
-                                                    </Link>
-                                                    {" · "}
-                                                    {status === "compatible"
-                                                        ? "Passer til produktet"
-                                                        : status === "incompatible"
-                                                            ? "Passer ikke til produktet"
-                                                            : "Må sjekkes"}
-                                                    <p className="text-slate-600">{reason}</p>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </details>
-                        </div>
-                    )}
-
-                    <div className="mt-6 flex gap-3">
-                        {step > 0 && (
-                            <button type="button" className={secondary} onClick={() => setStep(step - 1)}>
-                                Tilbake
-                            </button>
-                        )}
-                        {step < 3 && (
-                            <button
-                                type="button"
-                                className={`${primary} ml-auto`}
-                                disabled={nextDisabled}
-                                onClick={() => setStep(step + 1)}
-                            >
-                                {step === 2 ? "Se resultat" : "Neste"}
-                            </button>
-                        )}
-                    </div>
-                </div>
-
-                <aside className="min-w-0 border-t border-slate-200 bg-slate-50 p-5 sm:p-8 md:border-l md:border-t-0">
-                    <h2 className="text-lg font-bold">Dine valg</h2>
-                    <dl className="mt-3 space-y-3 break-words text-sm">
-                        <div>
-                            <dt className="font-semibold">Kategori</dt>
-                            <dd>{category || "–"}</dd>
-                        </div>
-                        <div>
-                            <dt className="font-semibold">Produkt</dt>
-                            <dd>{product?.name || "–"}</dd>
-                        </div>
-                        <div>
-                            <dt className="font-semibold">Kjøretøy</dt>
-                            <dd>{vehicle || "–"}</dd>
-                        </div>
-                    </dl>
-
-                    <section className="mt-6 border-t border-slate-200 pt-5">
-                        <h2 className="text-lg font-bold">Produktchat</h2>
-                        <div
-                            ref={chatLogRef}
-                            role="log"
-                            aria-label="Chatmeldinger"
-                            className="mt-3 max-h-72 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 text-sm"
-                        >
-                            <p className="rounded-lg bg-slate-100 p-2.5">
-                                Hei! Trenger du hjelp med produktvalg eller kompatibilitet?
-                            </p>
-                            {messages.map(({ question, answer }, index) => (
-                                <div key={index} className="space-y-2 break-words">
-                                    <p className="ml-4 rounded-lg bg-orange-50 p-2.5">{question}</p>
-                                    <p className="mr-4 rounded-lg bg-slate-100 p-2.5">{answer}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <form className="mt-3 flex gap-2" onSubmit={sendMessage}>
-                            <input
-                                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-                                aria-label="Melding til produktchatten"
-                                placeholder="Skriv et spørsmål …"
-                                value={draft}
-                                maxLength={500}
-                                onChange={(event) => setDraft(event.target.value)}
-                            />
-                            <button type="submit" className={`${primary} text-sm`} disabled={!draft.trim()}>
-                                Send
-                            </button>
-                        </form>
-                        <p className="mt-2 text-xs text-slate-500">
-                            Demo med faste svar basert på valgene dine.
-                        </p>
-                    </section>
-                </aside>
+              </select>
             </div>
-        </section>
-    );
+          )}
+
+          {step === 1 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold">Hvilken type produkt ser du etter?</h2>
+              <p className="text-sm text-slate-600">
+                Beskriv behovet med egne ord. Resultatlisten oppdateres fortløpende.
+              </p>
+
+              <input
+                type="search"
+                className={field}
+                placeholder="F.eks. arbeidslys for mørkt vinterarbeid"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className={secondary}
+                  onClick={analyseWithAi}
+                  disabled={isAnalysing || !searchText.trim()}
+                >
+                  {isAnalysing ? "Analyserer…" : "Foreslå med AI (valgfritt)"}
+                </button>
+                <p className="text-xs text-slate-500">
+                  Bruker rimelig modell og fungerer også uten API-nøkkel.
+                </p>
+              </div>
+
+              {intentSuggestion ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <p className="font-semibold">Tolket behov</p>
+                  <p className="mt-1 text-slate-700">{intentSuggestion.summary}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Kilde: {intentSuggestion.source} · Sikkerhet: {intentSuggestion.confidence}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-slate-800">Forslag fra produktlisten</h3>
+                {candidates.length > 0 ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {candidates.map((product) => (
+                      <button
+                        key={product.id}
+                        type="button"
+                        onClick={() => setSelectedProductId(product.id)}
+                        className={`rounded-lg border p-3 text-left transition ${
+                          selectedProductId === product.id
+                            ? "border-orange-700 bg-orange-50"
+                            : "border-slate-200 hover:border-slate-400"
+                        }`}
+                      >
+                        <p className="font-semibold">{product.name}</p>
+                        <p className="text-xs text-slate-500">{product.sku}</p>
+                        <p className="mt-1 text-sm text-slate-600">{product.shortDescription}</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">Ingen treff ennå. Prøv et bredere søk.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold">Hvordan skal produktet brukes?</h2>
+
+              <label className="block text-sm font-medium">
+                Bruksområde
+                <select
+                  className={field}
+                  value={useCase}
+                  onChange={(event) => setUseCase(event.target.value as GuideUseCase)}
+                >
+                  <option value="">Velg bruksområde</option>
+                  {useCases.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm font-medium">
+                {contextMode === "vehicle"
+                  ? "Kjøretøy / modell (valgfritt)"
+                  : contextMode === "equipment"
+                    ? "Maskin / utstyr (valgfritt)"
+                    : "Arbeidsmiljø / sted (valgfritt)"}
+                <input
+                  className={field}
+                  placeholder={
+                    contextMode === "vehicle"
+                      ? "F.eks. Traktor John Deere 6155R"
+                      : contextMode === "equipment"
+                        ? "F.eks. verkstedbenk med 12V strøm"
+                        : "F.eks. kystnært uteområde med mye fukt"
+                  }
+                  value={contextDetails}
+                  onChange={(event) => setContextDetails(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold">Prioritering og budsjett</h2>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                {valuePreferences.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setValuePreference(option.value)}
+                    className={`rounded-lg border p-3 text-left ${
+                      valuePreference === option.value
+                        ? "border-orange-700 bg-orange-50"
+                        : "border-slate-200"
+                    }`}
+                  >
+                    <p className="font-semibold">{option.label}</p>
+                    <p className="text-xs text-slate-600">{option.description}</p>
+                  </button>
+                ))}
+              </div>
+
+              <label className="block text-sm font-medium">
+                Viktigste egenskap (valgfritt)
+                <select
+                  className={field}
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value as Priority)}
+                >
+                  <option value="">Ingen valgt</option>
+                  {priorities.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-sm font-medium">
+                Budsjett (valgfritt)
+                <input
+                  className={field}
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  placeholder="F.eks. 5000"
+                  value={budgetNok}
+                  onChange={(event) => setBudgetNok(event.target.value)}
+                />
+              </label>
+
+              <label className="block text-sm font-medium">
+                Andre krav (valgfritt)
+                <textarea
+                  className={`${field} min-h-24`}
+                  placeholder="F.eks. kontaktstandard, dimensjoner, monteringsbehov"
+                  value={specialRequirements}
+                  onChange={(event) => setSpecialRequirements(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
+
+          <div className="mt-6 flex gap-3">
+            {step > 0 ? (
+              <button type="button" className={secondary} onClick={() => setStep((value) => value - 1)}>
+                Tilbake
+              </button>
+            ) : null}
+
+            {step < steps.length - 1 ? (
+              <button
+                type="button"
+                className={`${primary} ml-auto`}
+                disabled={!canNext}
+                onClick={() => setStep((value) => value + 1)}
+              >
+                Neste
+              </button>
+            ) : (
+              <button type="button" className={`${primary} ml-auto`} onClick={persistAndGoToResults}>
+                Se anbefaling
+              </button>
+            )}
+          </div>
+        </div>
+
+        <aside className="min-w-0 border-t border-slate-200 bg-slate-50 p-5 sm:p-8 md:border-l md:border-t-0">
+          <h2 className="text-lg font-bold">Oppsummert behov</h2>
+          <dl className="mt-3 space-y-3 break-words text-sm">
+            <div>
+              <dt className="font-semibold">Kategori</dt>
+              <dd>{category || "–"}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Produkttype</dt>
+              <dd>{searchText || "–"}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Eksempelprodukt</dt>
+              <dd>{selectedProduct?.name || "Ingen valgt"}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Bruksområde</dt>
+              <dd>{useCases.find((item) => item.value === useCase)?.label ?? "–"}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold">Valg</dt>
+              <dd>{valuePreferences.find((item) => item.value === valuePreference)?.label ?? "–"}</dd>
+            </div>
+          </dl>
+
+          {selectedProduct ? (
+            <div className="mt-6 border-t border-slate-200 pt-5">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Eksempel fra trefflisten
+              </h3>
+              <ProductCard product={selectedProduct} />
+            </div>
+          ) : null}
+
+          <div className="mt-6 border-t border-slate-200 pt-5 text-xs text-slate-500">
+            AI-forslag brukes kun til å tolke behovstekst. Endelig rangering og kompatibilitet
+            beregnes fra registrerte produktdata.
+          </div>
+        </aside>
+      </div>
+
+      <div className="mt-4">
+        <Link href="/products" className="text-sm font-semibold text-slate-700 underline">
+          Utforsk alle produkter manuelt
+        </Link>
+      </div>
+    </section>
+  );
 }

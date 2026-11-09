@@ -2,10 +2,22 @@ import { GuideQuestion } from "@/src/types/domain";
 
 export const guideQuestions: GuideQuestion[] = [
   {
+    id: "categoryIntent",
+    title: "Hvilken type produkt leter du etter?",
+    description: "Velg kategori først. Du kan spesifisere mer i neste steg.",
+    type: "text",
+    placeholder: "F.eks. arbeidslys, ryggekamera, kabelsett",
+  },
+  {
+    id: "productIntentText",
+    title: "Beskriv behovet ditt kort",
+    description: "Dette brukes til å finne relevante produkter uten at du må kjenne eksakt modellnavn.",
+    type: "text",
+    placeholder: "F.eks. trenger kraftig arbeidslys til traktor i mørke vinterforhold",
+  },
+  {
     id: "useCase",
-    title: "Hva skal du bruke utstyret til?",
-    description:
-      "Dette hjelper oss å finne produkter som passer arbeidsoppgaven du vil løse.",
+    title: "Hva skal produktet brukes til?",
     type: "single-choice",
     options: [
       { value: "maintenance", label: "Vedlikehold og reparasjon" },
@@ -18,9 +30,20 @@ export const guideQuestions: GuideQuestion[] = [
     ],
   },
   {
+    id: "valuePreference",
+    title: "Hva vil du prioritere i anbefalingen?",
+    description: "Du kan velge om guiden skal vekte beste totalvalg eller lavere pris høyest.",
+    type: "single-choice",
+    options: [
+      { value: "best", label: "Best mulig match" },
+      { value: "cheapest", label: "Billigste relevante alternativ" },
+      { value: "balanced", label: "Balansert mellom pris og kvalitet" },
+    ],
+  },
+  {
     id: "environment",
     title: "Hvilket miljø skal utstyret brukes i?",
-    description: "Miljøet påvirker robusthet, materialvalg og driftskrav.",
+    optional: true,
     type: "single-choice",
     options: [
       { value: "indoor", label: "Innendørs" },
@@ -32,7 +55,7 @@ export const guideQuestions: GuideQuestion[] = [
   {
     id: "usageIntensity",
     title: "Hvor ofte skal utstyret brukes?",
-    description: "Bruksfrekvens hjelper oss å balansere kapasitet og levetid.",
+    optional: true,
     type: "single-choice",
     options: [
       { value: "occasional", label: "Av og til" },
@@ -42,25 +65,9 @@ export const guideQuestions: GuideQuestion[] = [
     ],
   },
   {
-    id: "priority",
-    title: "Hva er viktigst for deg?",
-    optional: true,
-    description:
-      "Velg hva du vil vektlegge mest i anbefalingen. Du kan hoppe over dette spørsmålet.",
-    type: "single-choice",
-    options: [
-      { value: "price", label: "Lavest mulig pris" },
-      { value: "quality", label: "Best mulig kvalitet" },
-      { value: "capacity", label: "Høy kapasitet og ytelse" },
-      { value: "flexibility", label: "Fleksibilitet og flere bruksområder" },
-      { value: "durability", label: "Lang levetid og driftssikkerhet" },
-    ],
-  },
-  {
     id: "budgetNok",
     title: "Har du et omtrentlig budsjett i NOK?",
     optional: true,
-    description: "Valgfritt: Brukes for å sortere bedre mellom like gode alternativer.",
     type: "number",
     placeholder: "f.eks. 5500",
   },
@@ -68,9 +75,7 @@ export const guideQuestions: GuideQuestion[] = [
     id: "specialRequirements",
     title: "Har du noen spesielle krav?",
     optional: true,
-    description:
-      "Valgfritt: Oppgi for eksempel dimensjoner, kapasitet, eller kompatibilitet med eksisterende utstyr.",
     type: "text",
-    placeholder: "Skriv kort hva som er viktig for deg",
+    placeholder: "F.eks. dimensjoner, kapasitet, kontaktstandard eller kompatibilitet",
   },
 ];

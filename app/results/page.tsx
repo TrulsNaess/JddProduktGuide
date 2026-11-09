@@ -11,7 +11,22 @@ import { formatNok } from "@/src/services/format/price";
 import { clearGuideAnswers, loadGuideAnswers } from "@/src/services/guide/session";
 import { productRepository } from "@/src/services/products/repository";
 import { recommendProducts } from "@/src/services/recommendations/engine";
-import { GuideAnswers } from "@/src/types/domain";
+import { GuideAnswers, Priority, ValuePreference } from "@/src/types/domain";
+
+function valuePreferenceLabel(value?: ValuePreference): string {
+  if (value === "best") return "Best mulig match";
+  if (value === "cheapest") return "Billigste relevante alternativ";
+  return "Balansert mellom pris og kvalitet";
+}
+
+function priorityLabel(value?: Priority): string {
+  if (value === "price") return "Lavest mulig pris";
+  if (value === "quality") return "Best mulig kvalitet";
+  if (value === "capacity") return "Høy kapasitet";
+  if (value === "flexibility") return "Fleksibilitet";
+  if (value === "durability") return "Lang levetid";
+  return "Ikke spesifisert";
+}
 
 export default function ResultsPage() {
   const products = productRepository.getMainProducts();
@@ -88,6 +103,38 @@ export default function ResultsPage() {
         </p>
       </div>
 
+      <Section
+        title="Slik påvirket svarene dine rangeringen"
+        description="Anbefalingen er deterministisk og beregnes fra registrerte produktdata og valgene dine."
+      >
+        <div className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+          <p>
+            <span className="font-semibold">Produkttype:</span>{" "}
+            {answers.productIntentText || "Ikke oppgitt"}
+          </p>
+          <p>
+            <span className="font-semibold">Kategori:</span>{" "}
+            {answers.categoryIntent || "Ikke oppgitt"}
+          </p>
+          <p>
+            <span className="font-semibold">Bruksområde:</span>{" "}
+            {answers.useCase || "Ikke oppgitt"}
+          </p>
+          <p>
+            <span className="font-semibold">Prioritering:</span>{" "}
+            {valuePreferenceLabel(answers.valuePreference)}
+          </p>
+          <p>
+            <span className="font-semibold">Viktigste egenskap:</span>{" "}
+            {priorityLabel(answers.priority)}
+          </p>
+          <p>
+            <span className="font-semibold">Budsjett:</span>{" "}
+            {answers.budgetNok ? formatNok(answers.budgetNok) : "Ikke oppgitt"}
+          </p>
+        </div>
+      </Section>
+
       <RecommendationCard
         title="Vår anbefaling"
         product={bestProduct}
@@ -107,11 +154,23 @@ export default function ResultsPage() {
               }
 
               const label =
-                index === 0
-                  ? "Alternativ: beste totalvalg"
-                  : index === 1
-                    ? "Alternativ: budsjettfokus"
-                    : "Alternativ: intensiv bruk";
+                answers.valuePreference === "cheapest"
+                  ? index === 0
+                    ? "Alternativ: nest billigste match"
+                    : index === 1
+                      ? "Alternativ: bedre kapasitet"
+                      : "Alternativ: mer robust"
+                  : answers.valuePreference === "best"
+                    ? index === 0
+                      ? "Alternativ: høy ytelse"
+                      : index === 1
+                        ? "Alternativ: lavere pris"
+                        : "Alternativ: fleksibelt valg"
+                    : index === 0
+                      ? "Alternativ: beste totalvalg"
+                      : index === 1
+                        ? "Alternativ: budsjettfokus"
+                        : "Alternativ: intensiv bruk";
 
               return <ProductCard key={product.id} product={product} label={label} />;
             })

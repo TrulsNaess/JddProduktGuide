@@ -11,6 +11,9 @@ interface ScoreWeights {
   usageIntensity: number;
   priority: number;
   budget: number;
+  categoryIntent: number;
+  textIntent: number;
+  preferredProduct: number;
 }
 
 const defaultWeights: ScoreWeights = {
@@ -19,6 +22,9 @@ const defaultWeights: ScoreWeights = {
   usageIntensity: 20,
   priority: 15,
   budget: 10,
+  categoryIntent: 10,
+  textIntent: 12,
+  preferredProduct: 8,
 };
 
 function scoreCriterion(
@@ -32,11 +38,27 @@ function scoreCriterion(
   return { points: match ? weight : 0, matched: !!match };
 }
 
+function mainCategory(category: string): string {
+  return category.split("·")[0].trim().toLocaleLowerCase("nb");
+}
+
+function tokenize(text: string): string[] {
+  return text
+    .toLocaleLowerCase("nb")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length > 2);
+}
+
 export function recommendProducts(
   products: Product[],
   answers: GuideAnswers,
   weights: ScoreWeights = defaultWeights,
 ): RankedRecommendation {
+  const prices = products.map((product) => product.priceNok);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const priceRange = Math.max(1, maxPrice - minPrice);
+
   const scored = products
     .map((product): RecommendationResult => {
       const reasons: string[] = [];
@@ -77,10 +99,7 @@ export function recommendProducts(
 
       if (answers.usageIntensity) {
         const intensityMatch = product.usageIntensity.includes(answers.usageIntensity);
-        const usageIntensity = scoreCriterion(
-          intensityMatch,
-          weights.usageIntensity,
-        );
+        const usageIntensity = scoreCriterion(intensityMatch, weights.usageIntensity);
         score += usageIntensity.points;
 
         if (usageIntensity.matched) {
@@ -108,6 +127,39 @@ export function recommendProducts(
         }
       }
 
+      if (answers.categoryIntent) {
+        const categoryMatch =
+          mainCategory(product.category) ===
+          answers.categoryIntent.toLocaleLowerCase("nb");
+        if (categoryMatch) {
+          score += weights.categoryIntent;
+          reasons.push("Matcher valgt produktkategori.");
+          matchedCriteria.push("Kategori");
+        }
+      }
+
+      if (answers.productIntentText) {
+        const intentTokens = tokenize(answers.productIntentText);
+        const searchable = `${product.name} ${product.shortDescription} ${product.category} ${product.features.join(" ")}`.toLocaleLowerCase("nb");
+        const matchedTokenCount = intentTokens.filter((token) => searchable.includes(token)).length;
+
+        if (matchedTokenCount > 0) {
+          const textScore = Math.min(
+            weights.textIntent,
+            matchedTokenCount * Math.max(2, Math.floor(weights.textIntent / 4)),
+          );
+          score += textScore;
+          reasons.push("Samsvarer med behovsteksten du oppga.");
+          matchedCriteria.push("Behovstekst");
+        }
+      }
+
+      if (answers.preferredProductId && answers.preferredProductId === product.id) {
+        score += weights.preferredProduct;
+        reasons.push("Ligner produktet du markerte i trefflisten.");
+        matchedCriteria.push("Eksempelvalg");
+      }
+
       if (answers.budgetNok && answers.budgetNok > 0) {
         if (product.priceNok <= answers.budgetNok) {
           score += weights.budget;
@@ -116,6 +168,24 @@ export function recommendProducts(
         } else {
           limitations.push("Ligger over oppgitt budsjett.");
         }
+      }
+
+      if (answers.valuePreference === "cheapest") {
+        const priceAdvantage = (maxPrice - product.priceNok) / priceRange;
+        score += Math.round(priceAdvantage * 12);
+        reasons.push("Vektes opp fordi du prioriterte lavere pris.");
+      } else if (answers.valuePreference === "best") {
+        const performanceSignals = ["quality", "capacity", "durability"].filter((key) =>
+          product.priorities.includes(key as Product["priorities"][number]),
+        ).length;
+        score += performanceSignals * 4;
+        reasons.push("Vektes opp fordi du prioriterte best mulig match.");
+      } else if (answers.valuePreference === "balanced") {
+        const midPriceDistance = Math.abs(
+          product.priceNok - (minPrice + maxPrice) / 2,
+        );
+        const balancedBoost = Math.max(0, 6 - Math.round((midPriceDistance / priceRange) * 10));
+        score += balancedBoost;
       }
 
       if (!reasons.length) {

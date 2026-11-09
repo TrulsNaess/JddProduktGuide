@@ -13,6 +13,10 @@ export type Priority =
   | "flexibility"
   | "durability";
 
+export type ValuePreference = "best" | "cheapest" | "balanced";
+
+export type ContextMode = "vehicle" | "equipment" | "worksite" | "none";
+
 export type GuideUseCase =
   | "maintenance"
   | "construction"
@@ -69,6 +73,12 @@ export interface GuideAnswers {
   environment?: Environment;
   usageIntensity?: UsageIntensity;
   priority?: Priority;
+  valuePreference?: ValuePreference;
+  categoryIntent?: string;
+  productIntentText?: string;
+  preferredProductId?: string;
+  contextMode?: ContextMode;
+  contextDetails?: string;
   specialRequirements?: string;
   budgetNok?: number;
 }
@@ -87,6 +97,7 @@ export interface GuideQuestion {
   type: "single-choice" | "text" | "number";
   options?: GuideQuestionOption[];
   placeholder?: string;
+  showWhen?: (answers: GuideAnswers) => boolean;
 }
 
 export interface RecommendationResult {
