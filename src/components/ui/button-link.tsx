@@ -13,7 +13,7 @@ const baseClass =
 const variants = {
   primary: "bg-amber-500 text-slate-950 hover:bg-amber-400",
   secondary:
-    "border border-slate-300 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50",
+    "border border-slate-300 bg-white !text-slate-900 hover:border-slate-400 hover:bg-slate-50",
 };
 
 export function ButtonLink({ href, children, variant = "primary" }: ButtonLinkProps) {

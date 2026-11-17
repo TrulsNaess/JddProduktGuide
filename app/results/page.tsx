@@ -1,17 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AddToCartButton } from "@/src/components/cart/add-to-cart-button";
 import { AccessoryCard } from "@/src/components/recommendations/accessory-card";
 import { RecommendationCard } from "@/src/components/recommendations/recommendation-card";
 import { ProductCard } from "@/src/components/products/product-card";
 import { Section } from "@/src/components/ui/section";
+import { addToCart } from "@/src/services/cart/session";
 import { buildPackageSummary, getAccessorySuggestions } from "@/src/services/compatibility/accessories";
 import { formatNok } from "@/src/services/format/price";
 import { clearGuideAnswers, loadGuideAnswers } from "@/src/services/guide/session";
 import { productRepository } from "@/src/services/products/repository";
 import { recommendProducts } from "@/src/services/recommendations/engine";
-import { GuideAnswers, Priority, ValuePreference } from "@/src/types/domain";
+import { GuideAnswers, Priority, RecommendationResult, ValuePreference } from "@/src/types/domain";
+
+interface AiRecommendationResponse {
+  recommendedProductId?: string;
+  summary: string;
+  confidence: "low" | "medium" | "high";
+  outOfScope: boolean;
+  source: "openai" | "rules";
+}
 
 function valuePreferenceLabel(value?: ValuePreference): string {
   if (value === "best") return "Best mulig match";
@@ -31,14 +41,94 @@ function priorityLabel(value?: Priority): string {
 export default function ResultsPage() {
   const products = productRepository.getMainProducts();
   const accessories = productRepository.getAccessories();
-  const [answers, setAnswers] = useState<GuideAnswers>(() => loadGuideAnswers());
+  const [answers, setAnswers] = useState<GuideAnswers>({});
   const [selectedAccessoryIds, setSelectedAccessoryIds] = useState<string[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState<AiRecommendationResponse | null>(null);
+  const [isAnalysing, setIsAnalysing] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAnswers(loadGuideAnswers());
+    setIsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const hasInput =
+      !!answers.productIntentText?.trim() ||
+      !!answers.categoryIntent?.trim() ||
+      !!answers.useCase;
+
+    if (!hasInput) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function runAiRecommendation() {
+      setIsAnalysing(true);
+
+      try {
+        const response = await fetch("/api/guide-recommendation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers }),
+        });
+
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const data = (await response.json()) as AiRecommendationResponse;
+        if (!cancelled) {
+          setAiRecommendation(data);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAnalysing(false);
+        }
+      }
+    }
+
+    void runAiRecommendation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [answers, isHydrated]);
 
   const ranking = recommendProducts(products, answers);
-  const bestResult = ranking.bestMatch;
-  const bestProduct = bestResult
-    ? productRepository.getById(bestResult.productId)
-    : undefined;
+  const fallbackResult = ranking.bestMatch;
+
+  const bestProduct = useMemo(() => {
+    if (aiRecommendation?.outOfScope) return undefined;
+    if (aiRecommendation?.recommendedProductId) {
+      const aiProduct = productRepository.getById(aiRecommendation.recommendedProductId);
+      if (aiProduct) {
+        return aiProduct;
+      }
+    }
+
+    return fallbackResult ? productRepository.getById(fallbackResult.productId) : undefined;
+  }, [aiRecommendation, fallbackResult]);
+
+  const bestResult: RecommendationResult | undefined = useMemo(() => {
+    if (!bestProduct) return undefined;
+
+    const fromRanking = ranking.allRanked.find((item) => item.productId === bestProduct.id);
+    if (fromRanking) return fromRanking;
+
+    return {
+      productId: bestProduct.id,
+      score: 0,
+      reasons: ["Valgt som beste tilgjengelige match for beskrevet behov."],
+      limitations: [],
+      unmetAbsoluteRequirements: [],
+      matchedCriteria: [],
+    };
+  }, [bestProduct, ranking.allRanked]);
 
   const accessorySuggestions = bestProduct
     ? getAccessorySuggestions(bestProduct, accessories)
@@ -62,13 +152,32 @@ export default function ResultsPage() {
     });
   }
 
+  function addPackageToCart() {
+    if (!bestProduct) return;
+
+    addToCart(bestProduct.id, 1);
+    selectedAccessories.forEach((item) => addToCart(item.id, 1));
+  }
+
   function restartGuide() {
     clearGuideAnswers();
     setAnswers({});
     setSelectedAccessoryIds([]);
+    setAiRecommendation(null);
   }
 
-  if (!bestResult || !bestProduct) {
+  if (!isHydrated) {
+    return (
+      <Section
+        title="Laster anbefaling"
+        description="Henter svarene dine fra produktguiden."
+      >
+        <p className="text-sm text-slate-600">Vennligst vent…</p>
+      </Section>
+    );
+  }
+
+  if (!fallbackResult && !aiRecommendation) {
     return (
       <Section
         title="Ingen anbefaling tilgjengelig ennå"
@@ -77,7 +186,7 @@ export default function ResultsPage() {
         <div className="flex gap-3">
           <Link
             href="/guide"
-            className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
+            className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
           >
             Start produktguiden
           </Link>
@@ -98,18 +207,17 @@ export default function ResultsPage() {
         <p className="font-semibold">Et utvalg ekte JDD-produkter</p>
         <p>
           Priser og spesifikasjoner er hentet fra JDD Utstyr og kan endres.
-          Anbefalingsmerkingen er foreløpig prototypedata, og kompatibilitet må
-          bekreftes hos JDD Utstyr.
+          Anbefalingen kombinerer AI-tolkning og registrerte produktdata.
         </p>
       </div>
 
       <Section
-        title="Slik påvirket svarene dine rangeringen"
-        description="Anbefalingen er deterministisk og beregnes fra registrerte produktdata og valgene dine."
+        title="Oppsummert behov"
+        description="Dette er grunnlaget for anbefalingen."
       >
         <div className="grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
           <p>
-            <span className="font-semibold">Produkttype:</span>{" "}
+            <span className="font-semibold">Behov:</span>{" "}
             {answers.productIntentText || "Ikke oppgitt"}
           </p>
           <p>
@@ -133,132 +241,180 @@ export default function ResultsPage() {
             {answers.budgetNok ? formatNok(answers.budgetNok) : "Ikke oppgitt"}
           </p>
         </div>
+        {isAnalysing ? (
+          <p className="mt-3 text-sm text-slate-500">AI analyserer behovet ditt…</p>
+        ) : aiRecommendation ? (
+          <p className="mt-3 text-sm text-slate-600">
+            <span className="font-semibold">AI-vurdering:</span> {aiRecommendation.summary}
+          </p>
+        ) : null}
       </Section>
 
-      <RecommendationCard
-        title="Vår anbefaling"
-        product={bestProduct}
-        recommendation={bestResult}
-      />
-
-      <Section
-        title="Alternative produkter"
-        description="Disse valgene kan passe dersom du ønsker en annen balanse mellom pris, kapasitet og fleksibilitet."
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {ranking.alternatives.length > 0 ? (
-            ranking.alternatives.map((alternative, index) => {
-              const product = productRepository.getById(alternative.productId);
-              if (!product) {
-                return null;
-              }
-
-              const label =
-                answers.valuePreference === "cheapest"
-                  ? index === 0
-                    ? "Alternativ: nest billigste match"
-                    : index === 1
-                      ? "Alternativ: bedre kapasitet"
-                      : "Alternativ: mer robust"
-                  : answers.valuePreference === "best"
-                    ? index === 0
-                      ? "Alternativ: høy ytelse"
-                      : index === 1
-                        ? "Alternativ: lavere pris"
-                        : "Alternativ: fleksibelt valg"
-                    : index === 0
-                      ? "Alternativ: beste totalvalg"
-                      : index === 1
-                        ? "Alternativ: budsjettfokus"
-                        : "Alternativ: intensiv bruk";
-
-              return <ProductCard key={product.id} product={product} label={label} />;
-            })
-          ) : (
-            <p className="text-sm text-slate-600">Ingen alternativer tilgjengelig.</p>
-          )}
-        </div>
-      </Section>
-
-      <Section
-        title="Tilbehør"
-        description="Tilbehør med registrert kompatibilitet for anbefalingen vises her."
-      >
-        <div className="grid gap-4 lg:grid-cols-2">
-          {accessorySuggestions.length > 0 ? (
-            accessorySuggestions.map((suggestion) => (
-              <AccessoryCard
-                key={suggestion.product.id}
-                suggestion={suggestion}
-                selected={selectedAccessoryIds.includes(suggestion.product.id)}
-                onToggle={toggleAccessory}
-              />
-            ))
-          ) : (
-            <p className="text-sm text-slate-600">
-              Ingen registrerte tilbehørsforslag for dette produktet.
-            </p>
-          )}
-        </div>
-      </Section>
-
-      {packageSummary && selectedAccessories.length > 0 ? (
+      {aiRecommendation?.outOfScope ? (
         <Section
-          title="Eksempel på pakketilbud"
-          description="Totalen oppdateres når du legger til eller fjerner kompatibelt tilbehør."
+          title="Behovet ser ut til å ligge utenfor sortimentet"
+          description="Basert på beskrivelsen din har vi ikke et tydelig produkt som passer."
         >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[340px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-700">
-                  <th className="py-2 pr-4">Produkt</th>
-                  <th className="py-2 text-right">Pris</th>
-                </tr>
-              </thead>
-              <tbody>
-                {packageSummary.lines.map((line) => (
-                  <tr key={line.productId} className="border-b border-slate-100">
-                    <td className="py-2 pr-4 text-slate-700">{line.name}</td>
-                    <td className="py-2 text-right text-slate-900">
-                      {formatNok(line.priceNok)}
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="pt-3 pr-4 font-semibold text-slate-700">Samlet pris</td>
-                  <td className="pt-3 text-right font-semibold text-slate-900">
-                    {formatNok(packageSummary.subtotalNok)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="pt-1 pr-4 font-semibold text-slate-700">Pakkerabatt</td>
-                  <td className="pt-1 text-right font-semibold text-emerald-700">
-                    - {formatNok(packageSummary.packageDiscountNok)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="pt-1 pr-4 text-lg font-semibold text-slate-900">Total</td>
-                  <td className="pt-1 text-right text-lg font-semibold text-slate-900">
-                    {formatNok(packageSummary.totalNok)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <p className="text-sm text-slate-700">
+            Vi anbefaler å se etter en butikk med bredere utvalg for dette behovet.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href="/guide?resume=1"
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+            >
+              Juster behov i guiden
+            </Link>
+            <Link
+              href="/products"
+              className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+            >
+              Se vårt sortiment
+            </Link>
           </div>
         </Section>
+      ) : bestProduct && bestResult ? (
+        <>
+          <RecommendationCard
+            title="Vår anbefaling"
+            product={bestProduct}
+            recommendation={bestResult}
+          />
+
+          <div className="flex flex-wrap gap-3">
+            <AddToCartButton productId={bestProduct.id} label="Legg anbefaling i handlekurv" />
+            <Link
+              href="/cart"
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+            >
+              Gå til handlekurv
+            </Link>
+          </div>
+
+          <Section
+            title="Alternative produkter"
+            description="Hele kortet er klikkbart for å se detaljer."
+          >
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {ranking.alternatives.length > 0 ? (
+                ranking.alternatives.map((alternative, index) => {
+                  const product = productRepository.getById(alternative.productId);
+                  if (!product) {
+                    return null;
+                  }
+
+                  const label =
+                    answers.valuePreference === "cheapest"
+                      ? index === 0
+                        ? "Alternativ: nest billigste match"
+                        : index === 1
+                          ? "Alternativ: bedre kapasitet"
+                          : "Alternativ: mer robust"
+                      : answers.valuePreference === "best"
+                        ? index === 0
+                          ? "Alternativ: høy ytelse"
+                          : index === 1
+                            ? "Alternativ: lavere pris"
+                            : "Alternativ: fleksibelt valg"
+                        : index === 0
+                          ? "Alternativ: beste totalvalg"
+                          : index === 1
+                            ? "Alternativ: budsjettfokus"
+                            : "Alternativ: intensiv bruk";
+
+                  return <ProductCard key={product.id} product={product} label={label} />;
+                })
+              ) : (
+                <p className="text-sm text-slate-600">Ingen alternativer tilgjengelig.</p>
+              )}
+            </div>
+          </Section>
+
+          <Section
+            title="Pakketilbud"
+            description="Velg tilbehør som passer anbefalingen, og legg hele pakken i handlekurven."
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+              {accessorySuggestions.length > 0 ? (
+                accessorySuggestions.map((suggestion) => (
+                  <AccessoryCard
+                    key={suggestion.product.id}
+                    suggestion={suggestion}
+                    selected={selectedAccessoryIds.includes(suggestion.product.id)}
+                    onToggle={toggleAccessory}
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Ingen registrerte tilbehørsforslag for dette produktet.
+                </p>
+              )}
+            </div>
+
+            {packageSummary && selectedAccessories.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[340px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-700">
+                        <th className="py-2 pr-4">Produkt</th>
+                        <th className="py-2 text-right">Pris</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {packageSummary.lines.map((line) => (
+                        <tr key={line.productId} className="border-b border-slate-100">
+                          <td className="py-2 pr-4 text-slate-700">{line.name}</td>
+                          <td className="py-2 text-right text-slate-900">
+                            {formatNok(line.priceNok)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td className="pt-3 pr-4 font-semibold text-slate-700">Samlet pris</td>
+                        <td className="pt-3 text-right font-semibold text-slate-900">
+                          {formatNok(packageSummary.subtotalNok)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="pt-1 pr-4 font-semibold text-slate-700">Pakkerabatt</td>
+                        <td className="pt-1 text-right font-semibold text-emerald-700">
+                          - {formatNok(packageSummary.packageDiscountNok)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="pt-1 pr-4 text-lg font-semibold text-slate-900">Total</td>
+                        <td className="pt-1 text-right text-lg font-semibold text-slate-900">
+                          {formatNok(packageSummary.totalNok)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <button
+                  type="button"
+                  onClick={addPackageToCart}
+                  className="mt-4 rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+                >
+                  Legg pakketilbud i handlekurv
+                </button>
+              </div>
+            ) : null}
+          </Section>
+        </>
       ) : null}
 
       <div className="flex flex-wrap gap-3">
         <Link
-          href="/guide"
-          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:border-slate-400"
+          href="/guide?resume=1"
+          className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
         >
           Endre svar i guiden
         </Link>
         <Link
           href="/guide"
           onClick={restartGuide}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+          className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
         >
           Start guiden på nytt
         </Link>

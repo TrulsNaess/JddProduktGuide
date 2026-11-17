@@ -1,21 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ProductCard } from "@/src/components/products/product-card";
-import { loadGuideAnswers, saveGuideAnswers } from "@/src/services/guide/session";
+import {
+  clearGuideAnswers,
+  loadGuideAnswers,
+  saveGuideAnswers,
+} from "@/src/services/guide/session";
 import { productRepository } from "@/src/services/products/repository";
 import { GuideAnswers, GuideUseCase, Priority, ValuePreference } from "@/src/types/domain";
 
 const products = productRepository.getMainProducts();
-const steps = ["Kategori", "Behov", "Kontekst", "Prioritering"];
+const steps = ["Behov", "Kategori", "Kontekst", "Prioritering"];
 
 const field = "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2";
 const primary =
   "rounded-lg bg-orange-700 px-4 py-2 font-semibold text-white hover:bg-orange-800 disabled:opacity-50";
 const secondary =
-  "rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold hover:bg-slate-50";
+  "rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold !text-slate-900 hover:bg-slate-50";
 
 function mainCategory(category: string) {
   return category.split("·")[0].trim();
@@ -83,24 +86,54 @@ interface IntentApiResponse {
 
 export default function GuidePage() {
   const router = useRouter();
-  const stored = loadGuideAnswers();
 
   const [step, setStep] = useState(0);
-  const [category, setCategory] = useState(stored.categoryIntent ?? "");
-  const [searchText, setSearchText] = useState(stored.productIntentText ?? "");
-  const [selectedProductId, setSelectedProductId] = useState(stored.preferredProductId ?? "");
-  const [useCase, setUseCase] = useState<GuideUseCase | "">(stored.useCase ?? "");
-  const [contextDetails, setContextDetails] = useState(stored.contextDetails ?? "");
-  const [valuePreference, setValuePreference] = useState<ValuePreference>(
-    stored.valuePreference ?? "balanced",
-  );
-  const [priority, setPriority] = useState<Priority | "">(stored.priority ?? "");
-  const [budgetNok, setBudgetNok] = useState<string>(
-    stored.budgetNok ? String(stored.budgetNok) : "",
-  );
-  const [specialRequirements, setSpecialRequirements] = useState(stored.specialRequirements ?? "");
+  const [category, setCategory] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [useCase, setUseCase] = useState<GuideUseCase | "">("");
+  const [contextDetails, setContextDetails] = useState("");
+  const [valuePreference, setValuePreference] = useState<ValuePreference>("balanced");
+  const [priority, setPriority] = useState<Priority | "">("");
+  const [budgetNok, setBudgetNok] = useState<string>("");
+  const [specialRequirements, setSpecialRequirements] = useState("");
   const [intentSuggestion, setIntentSuggestion] = useState<IntentApiResponse | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
+
+  function resetGuideState() {
+    setStep(0);
+    setCategory("");
+    setSearchText("");
+    setUseCase("");
+    setContextDetails("");
+    setValuePreference("balanced");
+    setPriority("");
+    setBudgetNok("");
+    setSpecialRequirements("");
+    setIntentSuggestion(null);
+  }
+
+  useEffect(() => {
+    const shouldResume = new URLSearchParams(window.location.search).get("resume") === "1";
+
+    if (!shouldResume) {
+      clearGuideAnswers();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      resetGuideState();
+      return;
+    }
+
+    const stored = loadGuideAnswers();
+    setStep(0);
+    setCategory(stored.categoryIntent ?? "");
+    setSearchText(stored.productIntentText ?? "");
+    setUseCase(stored.useCase ?? "");
+    setContextDetails(stored.contextDetails ?? "");
+    setValuePreference(stored.valuePreference ?? "balanced");
+    setPriority(stored.priority ?? "");
+    setBudgetNok(stored.budgetNok ? String(stored.budgetNok) : "");
+    setSpecialRequirements(stored.specialRequirements ?? "");
+    setIntentSuggestion(null);
+  }, []);
 
   const contextMode = category ? contextModeForCategory(category) : "worksite";
 
@@ -119,19 +152,27 @@ export default function GuidePage() {
       .slice(0, 12);
   }, [category, searchText]);
 
-  const selectedProduct = products.find((product) => product.id === selectedProductId);
+  const hasNeedInput = searchText.trim().length >= 2;
 
   const canNext =
-    (step === 0 && !!category) ||
-    (step === 1 && searchText.trim().length >= 2) ||
+    (step === 0 && hasNeedInput) ||
+    (step === 1 && !!category) ||
     (step === 2 && !!useCase) ||
     step === 3;
+
+  function canJumpToStep(index: number) {
+    if (index <= step) return true;
+    if (index === 0) return true;
+    if (index === 1) return hasNeedInput;
+    if (index === 2) return hasNeedInput && !!category;
+    if (index === 3) return hasNeedInput && !!category && !!useCase;
+    return false;
+  }
 
   function persistAndGoToResults() {
     const answers: GuideAnswers = {
       categoryIntent: category,
       productIntentText: searchText.trim(),
-      preferredProductId: selectedProductId || undefined,
       contextMode,
       contextDetails: contextDetails.trim() || undefined,
       useCase: useCase || undefined,
@@ -182,18 +223,24 @@ export default function GuidePage() {
 
       <ol
         aria-label="Fremdrift"
-        className="my-6 grid grid-cols-4 rounded-xl bg-slate-200 p-4 text-center text-xs sm:text-sm"
+        className="my-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-200 p-2 text-center text-xs sm:grid-cols-4 sm:text-sm"
       >
         {steps.map((label, index) => (
-          <li key={label} aria-current={step === index ? "step" : undefined}>
-            <span
-              className={`mx-auto mb-2 grid h-8 w-8 place-items-center rounded-full font-bold ${
-                step === index ? "bg-orange-700 text-white" : "bg-white"
+          <li key={label}>
+            <button
+              type="button"
+              aria-current={step === index ? "step" : undefined}
+              disabled={!canJumpToStep(index)}
+              onClick={() => setStep(index)}
+              className={`w-full rounded-lg px-2 py-2 text-center transition ${
+                step === index
+                  ? "bg-orange-700 text-white"
+                  : "bg-white text-slate-900 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               }`}
             >
-              {index < step ? "✓" : index + 1}
-            </span>
-            {label}
+              <span className="mx-auto mb-1 block text-base font-bold">{index < step ? "✓" : index + 1}</span>
+              <span className="font-semibold">{label}</span>
+            </button>
           </li>
         ))}
       </ol>
@@ -202,33 +249,9 @@ export default function GuidePage() {
         <div className="p-5 sm:p-8">
           {step === 0 && (
             <div className="space-y-4">
-              <h2 className="text-xl font-bold">Hvilken produktkategori passer best?</h2>
+              <h2 className="text-xl font-bold">Hvilket behov prøver du å løse?</h2>
               <p className="text-sm text-slate-600">
-                Velg overordnet type. Du velger ikke endelig produkt enda.
-              </p>
-              <select
-                className={field}
-                value={category}
-                onChange={(event) => {
-                  setCategory(event.target.value);
-                  setSelectedProductId("");
-                }}
-              >
-                <option value="">Velg kategori</option>
-                {categories.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold">Hvilken type produkt ser du etter?</h2>
-              <p className="text-sm text-slate-600">
-                Beskriv behovet med egne ord. Resultatlisten oppdateres fortløpende.
+                Beskriv behovet med egne ord først. Deretter velger du kategori og prioriteringer.
               </p>
 
               <input
@@ -242,11 +265,11 @@ export default function GuidePage() {
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  className={secondary}
+                  className="rounded-lg bg-orange-700 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-800 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={analyseWithAi}
                   disabled={isAnalysing || !searchText.trim()}
                 >
-                  {isAnalysing ? "Analyserer…" : "Foreslå med AI (valgfritt)"}
+                  {isAnalysing ? "Analyserer…" : "Foreslå med AI"}
                 </button>
                 <p className="text-xs text-slate-500">
                   Bruker rimelig modell og fungerer også uten API-nøkkel.
@@ -263,31 +286,51 @@ export default function GuidePage() {
                 </div>
               ) : null}
 
-              <div className="space-y-2">
+              <div className="min-h-52 space-y-2">
                 <h3 className="text-sm font-semibold text-slate-800">Forslag fra produktlisten</h3>
                 {candidates.length > 0 ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     {candidates.map((product) => (
-                      <button
-                        key={product.id}
-                        type="button"
-                        onClick={() => setSelectedProductId(product.id)}
-                        className={`rounded-lg border p-3 text-left transition ${
-                          selectedProductId === product.id
-                            ? "border-orange-700 bg-orange-50"
-                            : "border-slate-200 hover:border-slate-400"
-                        }`}
-                      >
+                      <article key={product.id} className="rounded-lg border border-slate-200 p-3">
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-xs text-slate-500">{product.sku}</p>
                         <p className="mt-1 text-sm text-slate-600">{product.shortDescription}</p>
-                      </button>
+                        <Link
+                          href={`/products/${product.slug}`}
+                          className="mt-2 inline-flex text-sm font-semibold text-orange-800 hover:text-orange-900"
+                        >
+                          Se produktdetaljer
+                        </Link>
+                      </article>
                     ))}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-600">Ingen treff ennå. Prøv et bredere søk.</p>
                 )}
               </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold">Velg produktkategori</h2>
+              <p className="text-sm text-slate-600">
+                Kategori kan endres når som helst via fremdriftsmenyen over.
+              </p>
+              <select
+                className={field}
+                value={category}
+                onChange={(event) => {
+                  setCategory(event.target.value);
+                }}
+              >
+                <option value="">Velg kategori</option>
+                {categories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -424,35 +467,22 @@ export default function GuidePage() {
           <h2 className="text-lg font-bold">Oppsummert behov</h2>
           <dl className="mt-3 space-y-3 break-words text-sm">
             <div>
-              <dt className="font-semibold">Kategori</dt>
-              <dd>{category || "–"}</dd>
-            </div>
-            <div>
-              <dt className="font-semibold">Produkttype</dt>
+              <dt className="font-semibold">Behovstekst</dt>
               <dd>{searchText || "–"}</dd>
             </div>
             <div>
-              <dt className="font-semibold">Eksempelprodukt</dt>
-              <dd>{selectedProduct?.name || "Ingen valgt"}</dd>
+              <dt className="font-semibold">Kategori</dt>
+              <dd>{category || "–"}</dd>
             </div>
             <div>
               <dt className="font-semibold">Bruksområde</dt>
               <dd>{useCases.find((item) => item.value === useCase)?.label ?? "–"}</dd>
             </div>
             <div>
-              <dt className="font-semibold">Valg</dt>
+              <dt className="font-semibold">Prioritering</dt>
               <dd>{valuePreferences.find((item) => item.value === valuePreference)?.label ?? "–"}</dd>
             </div>
           </dl>
-
-          {selectedProduct ? (
-            <div className="mt-6 border-t border-slate-200 pt-5">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-600">
-                Eksempel fra trefflisten
-              </h3>
-              <ProductCard product={selectedProduct} />
-            </div>
-          ) : null}
 
           <div className="mt-6 border-t border-slate-200 pt-5 text-xs text-slate-500">
             AI-forslag brukes kun til å tolke behovstekst. Endelig rangering og kompatibilitet

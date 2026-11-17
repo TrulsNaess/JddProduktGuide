@@ -189,12 +189,14 @@ export function ProductCatalog({ categories }: ProductCatalogProps) {
                 {products.length === 1 ? "produkt" : "produkter"}
               </p>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {products.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
                   label={product.kind === "accessory" ? "Tilbehør" : undefined}
+                  fullCardLink={false}
+                  showAddToCart
                 />
               ))}
             </div>

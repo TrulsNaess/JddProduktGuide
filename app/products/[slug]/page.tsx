@@ -1,8 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
+import { AddToCartButton } from "@/src/components/cart/add-to-cart-button";
 import { Section } from "@/src/components/ui/section";
 import { Tag } from "@/src/components/ui/tag";
+import { getAccessorySuggestions } from "@/src/services/compatibility/accessories";
 import { formatNok } from "@/src/services/format/price";
 import { productRepository } from "@/src/services/products/repository";
 
@@ -37,6 +39,13 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const suggestedPackageAccessories =
+    product.kind === "main"
+      ? getAccessorySuggestions(product, productRepository.getAccessories())
+          .filter((item) => item.status !== "incompatible")
+          .slice(0, 2)
+      : [];
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
@@ -69,6 +78,15 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
                 <Tag key={feature} text={feature} tone="neutral" />
               ))}
             </div>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <AddToCartButton productId={product.id} />
+              <Link
+                href="/cart"
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              >
+                Gå til handlekurv
+              </Link>
+            </div>
           </div>
         </div>
       </Section>
@@ -96,6 +114,34 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
           </ul>
         </Section>
       </div>
+
+      {suggestedPackageAccessories.length > 0 ? (
+        <Section
+          title="Forslag til pakketilbud"
+          description="Forhåndsdefinerte tilbehør som ofte passer sammen med dette produktet."
+        >
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            {suggestedPackageAccessories.map((item) => (
+              <div key={item.product.id} className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">{item.product.name}</p>
+                  <p className="text-xs text-slate-500">{item.reason}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-900">
+                    {formatNok(item.product.priceNok)}
+                  </span>
+                  <AddToCartButton
+                    productId={item.product.id}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+                    label="Legg til"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       <Section
         title="Kompatibilitet"
