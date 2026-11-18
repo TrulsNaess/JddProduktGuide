@@ -52,7 +52,7 @@ export function AccessoryCard({
             ? "cursor-not-allowed bg-slate-200 text-slate-500"
             : selected
               ? "bg-slate-900 text-white hover:bg-slate-700"
-              : "bg-amber-500 text-slate-950 hover:bg-amber-400"
+              : "bg-blue-700 text-white hover:bg-blue-800"
         }`}
       >
         {isDisabled ? "Kan ikke velges" : selected ? "Fjern fra pakke" : "Legg til i pakke"}

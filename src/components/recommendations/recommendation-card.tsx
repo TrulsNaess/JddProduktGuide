@@ -77,7 +77,7 @@ export function RecommendationCard({
         <span className="text-sm text-slate-500">Score: {recommendation.score}</span>
         <Link
           href={`/products/${product.slug}`}
-          className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
         >
           Se produktdetaljer
         </Link>

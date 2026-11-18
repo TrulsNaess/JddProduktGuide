@@ -11,7 +11,6 @@ interface ScoreWeights {
   usageIntensity: number;
   priority: number;
   budget: number;
-  categoryIntent: number;
   textIntent: number;
   preferredProduct: number;
 }
@@ -22,8 +21,7 @@ const defaultWeights: ScoreWeights = {
   usageIntensity: 20,
   priority: 15,
   budget: 10,
-  categoryIntent: 10,
-  textIntent: 12,
+  textIntent: 16,
   preferredProduct: 8,
 };
 
@@ -36,10 +34,6 @@ function scoreCriterion(
   }
 
   return { points: match ? weight : 0, matched: !!match };
-}
-
-function mainCategory(category: string): string {
-  return category.split("·")[0].trim().toLocaleLowerCase("nb");
 }
 
 function tokenize(text: string): string[] {
@@ -127,23 +121,14 @@ export function recommendProducts(
         }
       }
 
-      if (answers.categoryIntent) {
-        const categoryMatch =
-          mainCategory(product.category) ===
-          answers.categoryIntent.toLocaleLowerCase("nb");
-        if (categoryMatch) {
-          score += weights.categoryIntent;
-          reasons.push("Matcher valgt produktkategori.");
-          matchedCriteria.push("Kategori");
-        }
-      }
-
       if (answers.productIntentText) {
         const intentTokens = tokenize(answers.productIntentText);
         const searchable = `${product.name} ${product.shortDescription} ${product.category} ${product.features.join(" ")}`.toLocaleLowerCase("nb");
         const matchedTokenCount = intentTokens.filter((token) => searchable.includes(token)).length;
 
-        if (matchedTokenCount > 0) {
+        if (intentTokens.length > 0 && matchedTokenCount === 0) {
+          unmetAbsoluteRequirements.push("Matcher ikke behovsteksten du oppga.");
+        } else if (matchedTokenCount > 0) {
           const textScore = Math.min(
             weights.textIntent,
             matchedTokenCount * Math.max(2, Math.floor(weights.textIntent / 4)),
@@ -204,6 +189,7 @@ export function recommendProducts(
       };
     })
     .filter((result) => result.unmetAbsoluteRequirements.length === 0)
+    .filter((result) => result.matchedCriteria.length > 0)
     .sort((a, b) => b.score - a.score);
 
   const bestMatch = scored[0] ?? null;

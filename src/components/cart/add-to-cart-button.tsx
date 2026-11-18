@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { addToCart } from "@/src/services/cart/session";
+import { AddToCartSource, addToCart } from "@/src/services/cart/session";
 
 interface AddToCartButtonProps {
   productId: string;
   quantity?: number;
   className?: string;
   label?: string;
+  source?: AddToCartSource;
+  suppressPackageOffer?: boolean;
 }
 
 export function AddToCartButton({
@@ -15,11 +17,13 @@ export function AddToCartButton({
   quantity = 1,
   className,
   label = "Legg i handlekurv",
+  source,
+  suppressPackageOffer = false,
 }: AddToCartButtonProps) {
   const [added, setAdded] = useState(false);
 
   function handleClick() {
-    addToCart(productId, quantity);
+    addToCart(productId, quantity, { source, suppressPackageOffer });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1300);
   }
@@ -30,7 +34,7 @@ export function AddToCartButton({
       onClick={handleClick}
       className={
         className ??
-        "rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+        "rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
       }
     >
       {added ? "Lagt til" : label}

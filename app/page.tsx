@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <div className="space-y-8">
       <section className="rounded-2xl border border-slate-200 bg-slate-900 px-6 py-12 text-slate-50 shadow-sm sm:px-10">
-        <p className="mb-3 inline-block rounded-full bg-amber-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-300">
+        <p className="mb-3 inline-block rounded-full bg-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-100">
           Prototype med ekte JDD-produkter
         </p>
         <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">

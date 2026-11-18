@@ -58,6 +58,7 @@ export function ProductCard({
       {showAddToCart ? (
         <AddToCartButton
           productId={product.id}
+          source="catalog"
           className="mt-3 w-full rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
         />
       ) : null}

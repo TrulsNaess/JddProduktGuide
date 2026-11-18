@@ -26,7 +26,7 @@ function rulesFallback(answers: GuideAnswers): GuideRecommendationResponse {
   if (!best) {
     return {
       summary:
-        "Vi fant ikke en tydelig match i vårt sortiment. Prøv gjerne en annen butikk med bredere utvalg for dette behovet.",
+        "Vi har ikke et produkt i vårt sortiment som passer det ønskede behovet akkurat nå.",
       confidence: "medium",
       outOfScope: true,
       source: "rules",
@@ -35,7 +35,7 @@ function rulesFallback(answers: GuideAnswers): GuideRecommendationResponse {
 
   return {
     recommendedProductId: best.productId,
-    summary: "Anbefalt produkt er valgt fra vårt sortiment basert på behov, kategori og prioriteringer.",
+    summary: "Anbefalt produkt er valgt fra vårt sortiment basert på behov, kontekst og prioriteringer.",
     confidence: "medium",
     outOfScope: false,
     source: "rules",
@@ -59,14 +59,11 @@ function selectCandidates(answers: GuideAnswers) {
         .toLocaleLowerCase("nb");
 
       const tokenHits = queryTokens.filter((token) => searchable.includes(token)).length;
-      const categoryHit = answers.categoryIntent
-        ? product.category.toLocaleLowerCase("nb").includes(answers.categoryIntent.toLocaleLowerCase("nb"))
-        : false;
       const useCaseHit = answers.useCase ? product.useCases.includes(answers.useCase) : false;
 
       return {
         product,
-        score: tokenHits * 2 + (categoryHit ? 3 : 0) + (useCaseHit ? 3 : 0),
+        score: tokenHits * 2 + (useCaseHit ? 3 : 0),
       };
     })
     .sort((a, b) => b.score - a.score)

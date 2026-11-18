@@ -62,7 +62,10 @@ export function buildPackageSummary(
   ];
 
   const subtotalNok = lines.reduce((acc, line) => acc + line.priceNok, 0);
-  const packageDiscountNok = selectedAccessories.length >= 2 ? 200 : 0;
+  const packageDiscountNok =
+    selectedAccessories.length > 0
+      ? Math.min(300, Math.max(50, Math.round(subtotalNok * 0.03)))
+      : 0;
 
   return {
     lines,

@@ -74,6 +74,7 @@ export interface GuideAnswers {
   usageIntensity?: UsageIntensity;
   priority?: Priority;
   valuePreference?: ValuePreference;
+  needText?: string;
   categoryIntent?: string;
   productIntentText?: string;
   preferredProductId?: string;

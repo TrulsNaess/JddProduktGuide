@@ -11,7 +11,7 @@ const baseClass =
   "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold transition";
 
 const variants = {
-  primary: "bg-amber-500 text-slate-950 hover:bg-amber-400",
+  primary: "bg-blue-700 text-white hover:bg-blue-800",
   secondary:
     "border border-slate-300 bg-white !text-slate-900 hover:border-slate-400 hover:bg-slate-50",
 };

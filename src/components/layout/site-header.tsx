@@ -38,7 +38,7 @@ export function SiteHeader() {
           ))}
           <Link
             href="/cart"
-            className="rounded-md bg-orange-700 px-3 py-2 font-semibold text-white hover:bg-orange-800"
+            className="rounded-md bg-blue-700 px-3 py-2 font-semibold text-white hover:bg-blue-800"
           >
             Handlekurv ({itemsInCart})
           </Link>

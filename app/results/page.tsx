@@ -40,7 +40,7 @@ function priorityLabel(value?: Priority): string {
 
 export default function ResultsPage() {
   const products = productRepository.getMainProducts();
-  const accessories = productRepository.getAccessories();
+  const accessories = productRepository.getAccessories().filter((item) => !item.isDemo);
   const [answers, setAnswers] = useState<GuideAnswers>({});
   const [selectedAccessoryIds, setSelectedAccessoryIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -53,13 +53,23 @@ export default function ResultsPage() {
     setIsHydrated(true);
   }, []);
 
+  const combinedNeedText = useMemo(
+    () => `${answers.needText ?? ""} ${answers.productIntentText ?? ""}`.trim() || undefined,
+    [answers.needText, answers.productIntentText],
+  );
+
+  const answersForRecommendation: GuideAnswers = useMemo(
+    () => ({
+      ...answers,
+      productIntentText: combinedNeedText,
+    }),
+    [answers, combinedNeedText],
+  );
+
   useEffect(() => {
     if (!isHydrated) return;
 
-    const hasInput =
-      !!answers.productIntentText?.trim() ||
-      !!answers.categoryIntent?.trim() ||
-      !!answers.useCase;
+    const hasInput = !!answersForRecommendation.productIntentText?.trim();
 
     if (!hasInput) {
       return;
@@ -74,7 +84,7 @@ export default function ResultsPage() {
         const response = await fetch("/api/guide-recommendation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answers }),
+          body: JSON.stringify({ answers: answersForRecommendation }),
         });
 
         if (!response.ok || cancelled) {
@@ -97,9 +107,9 @@ export default function ResultsPage() {
     return () => {
       cancelled = true;
     };
-  }, [answers, isHydrated]);
+  }, [answersForRecommendation, isHydrated]);
 
-  const ranking = recommendProducts(products, answers);
+  const ranking = recommendProducts(products, answersForRecommendation);
   const fallbackResult = ranking.bestMatch;
 
   const bestProduct = useMemo(() => {
@@ -155,8 +165,10 @@ export default function ResultsPage() {
   function addPackageToCart() {
     if (!bestProduct) return;
 
-    addToCart(bestProduct.id, 1);
-    selectedAccessories.forEach((item) => addToCart(item.id, 1));
+    addToCart(bestProduct.id, 1, { source: "guide", suppressPackageOffer: true });
+    selectedAccessories.forEach((item) =>
+      addToCart(item.id, 1, { source: "guide", suppressPackageOffer: true }),
+    );
   }
 
   function restartGuide() {
@@ -186,7 +198,7 @@ export default function ResultsPage() {
         <div className="flex gap-3">
           <Link
             href="/guide"
-            className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+            className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
           >
             Start produktguiden
           </Link>
@@ -221,12 +233,16 @@ export default function ResultsPage() {
             {answers.productIntentText || "Ikke oppgitt"}
           </p>
           <p>
-            <span className="font-semibold">Kategori:</span>{" "}
-            {answers.categoryIntent || "Ikke oppgitt"}
+            <span className="font-semibold">Hva trenger du:</span>{" "}
+            {answers.needText || "Ikke oppgitt"}
           </p>
           <p>
-            <span className="font-semibold">Bruksområde:</span>{" "}
-            {answers.useCase || "Ikke oppgitt"}
+            <span className="font-semibold">Hvor/hvordan brukes det:</span>{" "}
+            {answers.contextDetails || "Ikke oppgitt"}
+          </p>
+          <p>
+            <span className="font-semibold">Skal brukes med noe annet:</span>{" "}
+            {answers.specialRequirements || "Ikke oppgitt"}
           </p>
           <p>
             <span className="font-semibold">Prioritering:</span>{" "}
@@ -253,10 +269,10 @@ export default function ResultsPage() {
       {aiRecommendation?.outOfScope ? (
         <Section
           title="Behovet ser ut til å ligge utenfor sortimentet"
-          description="Basert på beskrivelsen din har vi ikke et tydelig produkt som passer."
+          description="Vi har ikke et produkt som passer det ønskede behovet akkurat nå."
         >
           <p className="text-sm text-slate-700">
-            Vi anbefaler å se etter en butikk med bredere utvalg for dette behovet.
+            For denne typen forespørsel selger vi ikke et produkt som matcher godt nok.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
@@ -267,7 +283,7 @@ export default function ResultsPage() {
             </Link>
             <Link
               href="/products"
-              className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+              className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
             >
               Se vårt sortiment
             </Link>
@@ -282,7 +298,11 @@ export default function ResultsPage() {
           />
 
           <div className="flex flex-wrap gap-3">
-            <AddToCartButton productId={bestProduct.id} label="Legg anbefaling i handlekurv" />
+            <AddToCartButton
+              productId={bestProduct.id}
+              source="guide"
+              label="Legg anbefaling i handlekurv"
+            />
             <Link
               href="/cart"
               className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
@@ -394,7 +414,7 @@ export default function ResultsPage() {
                 <button
                   type="button"
                   onClick={addPackageToCart}
-                  className="mt-4 rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+                  className="mt-4 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
                 >
                   Legg pakketilbud i handlekurv
                 </button>
@@ -414,7 +434,7 @@ export default function ResultsPage() {
         <Link
           href="/guide"
           onClick={restartGuide}
-          className="rounded-md bg-orange-700 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-800"
+          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
         >
           Start guiden på nytt
         </Link>

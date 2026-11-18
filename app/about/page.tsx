@@ -32,7 +32,7 @@ export default function AboutPage() {
 
       <Link
         href="/guide"
-        className="inline-flex rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400"
+        className="inline-flex rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
       >
         Start produktguiden
       </Link>

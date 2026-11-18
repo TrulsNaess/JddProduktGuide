@@ -1,11 +1,24 @@
 import { Product } from "@/src/types/domain";
 
 const CART_SESSION_KEY = "jdd-product-guide-cart";
+const PACKAGE_OFFER_SESSION_KEY = "jdd-product-guide-package-offer";
 const CART_EVENT = "jdd-cart-updated";
 
 export interface CartItem {
   productId: string;
   quantity: number;
+}
+
+export type AddToCartSource = "guide" | "catalog";
+
+export interface AddToCartOptions {
+  source?: AddToCartSource;
+  suppressPackageOffer?: boolean;
+}
+
+export interface PendingPackageOffer {
+  baseProductId: string;
+  source: AddToCartSource;
 }
 
 export function loadCartItems(): CartItem[] {
@@ -33,6 +46,48 @@ export function loadCartItems(): CartItem[] {
   }
 }
 
+export function loadPendingPackageOffer(): PendingPackageOffer | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.sessionStorage.getItem(PACKAGE_OFFER_SESSION_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as PendingPackageOffer;
+    if (
+      typeof parsed.baseProductId === "string" &&
+      (parsed.source === "catalog" || parsed.source === "guide")
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingPackageOffer(offer: PendingPackageOffer): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(PACKAGE_OFFER_SESSION_KEY, JSON.stringify(offer));
+  window.dispatchEvent(new CustomEvent(CART_EVENT));
+}
+
+export function clearPendingPackageOffer(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.removeItem(PACKAGE_OFFER_SESSION_KEY);
+  window.dispatchEvent(new CustomEvent(CART_EVENT));
+}
+
 function saveCartItems(items: CartItem[]): void {
   if (typeof window === "undefined") {
     return;
@@ -42,8 +97,18 @@ function saveCartItems(items: CartItem[]): void {
   window.dispatchEvent(new CustomEvent(CART_EVENT));
 }
 
-export function addToCart(productId: string, quantity = 1): void {
+export function addToCart(
+  productId: string,
+  quantity = 1,
+  options: AddToCartOptions = {},
+): void {
   if (!productId || quantity <= 0) return;
+
+  if (options.suppressPackageOffer) {
+    clearPendingPackageOffer();
+  } else if (options.source === "catalog") {
+    savePendingPackageOffer({ baseProductId: productId, source: "catalog" });
+  }
 
   const current = loadCartItems();
   const existing = current.find((item) => item.productId === productId);
@@ -85,6 +150,7 @@ export function clearCart(): void {
   }
 
   window.sessionStorage.removeItem(CART_SESSION_KEY);
+  window.sessionStorage.removeItem(PACKAGE_OFFER_SESSION_KEY);
   window.dispatchEvent(new CustomEvent(CART_EVENT));
 }
 
