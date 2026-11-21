@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { AccessorySuggestion } from "@/src/types/domain";
 import { formatNok } from "@/src/services/format/price";
 import { Tag } from "@/src/components/ui/tag";
@@ -36,11 +37,24 @@ export function AccessoryCard({
           tone={suggestion.status === "compatible" ? "success" : suggestion.status === "unknown" ? "neutral" : "warn"}
         />
       </div>
-      <h3 className="text-base font-semibold text-slate-900">{suggestion.product.name}</h3>
-      <p className="mt-1 text-sm text-slate-600">{suggestion.product.shortDescription}</p>
-      <p className="mt-2 text-sm font-semibold text-slate-900">
-        {formatNok(suggestion.product.priceNok)}
-      </p>
+      <div className="flex items-start gap-3">
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+          <Image
+            src={suggestion.product.image}
+            alt={suggestion.product.name}
+            fill
+            sizes="80px"
+            className="object-contain p-2"
+          />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-slate-900">{suggestion.product.name}</h3>
+          <p className="mt-1 text-sm text-slate-600">{suggestion.product.shortDescription}</p>
+          <p className="mt-2 text-sm font-semibold text-slate-900">
+            {formatNok(suggestion.product.priceNok)}
+          </p>
+        </div>
+      </div>
       <p className="mt-2 text-xs text-slate-500">{suggestion.reason}</p>
 
       <button

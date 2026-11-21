@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { buildPackageSummary, getAccessorySuggestions } from "@/src/services/compatibility/accessories";
+import { buildPackageSummary, generatePackageSuggestions } from "@/src/services/compatibility/accessories";
 import { formatNok } from "@/src/services/format/price";
 import {
   addToCart,
@@ -61,11 +62,10 @@ export default function CartPage() {
       return null;
     }
 
-    const offeredAccessories = getAccessorySuggestions(
+    const offeredAccessories = generatePackageSuggestions(
       baseProduct,
       productRepository.getAccessories().filter((item) => !item.isDemo),
     )
-      .filter((suggestion) => suggestion.status === "compatible")
       .map((suggestion) => suggestion.product)
       .filter((product) => !items.some((item) => item.productId === product.id))
       .slice(0, 2);
@@ -123,7 +123,18 @@ export default function CartPage() {
               <div className="mt-3 space-y-2 text-sm text-slate-700">
                 {packageOffer.offeredAccessories.map((product) => (
                   <div key={product.id} className="flex items-center justify-between gap-3">
-                    <span>{product.name}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          fill
+                          sizes="56px"
+                          className="object-contain p-1.5"
+                        />
+                      </div>
+                      <span>{product.name}</span>
+                    </div>
                     <span className="font-semibold text-slate-900">{formatNok(product.priceNok)}</span>
                   </div>
                 ))}

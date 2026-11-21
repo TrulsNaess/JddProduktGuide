@@ -48,6 +48,133 @@ export function getAccessorySuggestions(
     });
 }
 
+export function generatePackageSuggestions(
+  baseProduct: Product,
+  accessories: Product[],
+): AccessorySuggestion[] {
+  const explicit = getAccessorySuggestions(baseProduct, accessories).filter(
+    (suggestion) =>
+      suggestion.status === "compatible" ||
+      (suggestion.status === "unknown" &&
+        suggestion.relationship === "required"),
+  );
+
+  if (explicit.length > 0) {
+    return explicit.slice(0, 4);
+  }
+
+  const normalizedCategory = baseProduct.category.toLocaleLowerCase("nb");
+  const normalizedText = [
+    baseProduct.name,
+    baseProduct.description,
+    baseProduct.shortDescription,
+    ...baseProduct.features,
+  ]
+    .join(" ")
+    .toLocaleLowerCase("nb");
+
+  const matches: AccessorySuggestion[] = [];
+
+  function addFallback(product: Product | undefined, reason: string) {
+    if (
+      product &&
+      !matches.some((suggestion) => suggestion.product.id === product.id)
+    ) {
+      matches.push({
+        product,
+        relationship: "recommended",
+        status: "compatible",
+        reason,
+      });
+    }
+  }
+
+  if (
+    normalizedCategory.includes("arbeidslys") ||
+    normalizedCategory.includes("ekstralys") ||
+    normalizedCategory.includes("led-bar") ||
+    normalizedText.includes("arbeidslys") ||
+    normalizedText.includes("ekstralys")
+  ) {
+    const cableCandidates = accessories.filter((accessory) => {
+      const text = `${accessory.name} ${accessory.description} ${accessory.category}`
+        .toLocaleLowerCase("nb");
+      return (
+        text.includes("kabelsett") ||
+        text.includes("skjøtekabel") ||
+        text.includes("kabel") ||
+        text.includes("kontakt")
+      );
+    });
+
+    const vehicleCable =
+      cableCandidates.find((accessory) =>
+        `${accessory.name} ${accessory.description}`
+          .toLocaleLowerCase("nb")
+          .includes("5416"),
+      ) ??
+      cableCandidates.find((accessory) => {
+        const text = `${accessory.name} ${accessory.description}`
+          .toLocaleLowerCase("nb");
+        return text.includes("dt") && text.includes("2");
+      }) ??
+      cableCandidates.find((accessory) =>
+        `${accessory.name} ${accessory.description}`
+          .toLocaleLowerCase("nb")
+          .includes("kabelsett"),
+      );
+
+    addFallback(
+      vehicleCable,
+      "Generert tilbehørspakke for elektrisk tilkobling av produktet.",
+    );
+  }
+
+  if (
+    normalizedCategory.includes("tilhenger") ||
+    normalizedText.includes("tilhenger")
+  ) {
+    const trailerCable = accessories.find((accessory) => {
+      const text = `${accessory.name} ${accessory.description}`
+        .toLocaleLowerCase("nb");
+      return text.includes("kabelsett") && text.includes("tilhenger");
+    });
+    addFallback(
+      trailerCable,
+      "Generert kabelsett som passer en vanlig tilhengerinstallasjon.",
+    );
+  }
+
+  if (
+    normalizedCategory.includes("kamera") ||
+    normalizedText.includes("kamera")
+  ) {
+    const cameraCable = accessories.find((accessory) => {
+      const text = `${accessory.name} ${accessory.description}`
+        .toLocaleLowerCase("nb");
+      return (
+        text.includes("kabel") &&
+        (text.includes("kamera") || text.includes("4-pin") || text.includes("rca"))
+      );
+    });
+    addFallback(
+      cameraCable,
+      "Generert kabelløsning for tilkobling av kameraet.",
+    );
+  }
+
+  const bracket = accessories.find((accessory) => {
+    const text = `${accessory.name} ${accessory.description}`
+      .toLocaleLowerCase("nb");
+    return text.includes("brakett") || text.includes("festebr");
+  });
+  if (bracket) {
+    addFallback(bracket, "Generert feste som kan brukes ved montering.");
+  }
+
+  return matches.slice(0, 4);
+}
+
 export function buildPackageSummary(
   baseProduct: Product,
   selectedAccessories: Product[],

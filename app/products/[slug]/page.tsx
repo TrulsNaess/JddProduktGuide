@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { AddToCartButton } from "@/src/components/cart/add-to-cart-button";
 import { Section } from "@/src/components/ui/section";
 import { Tag } from "@/src/components/ui/tag";
-import { getAccessorySuggestions } from "@/src/services/compatibility/accessories";
+import { generatePackageSuggestions } from "@/src/services/compatibility/accessories";
 import { formatNok } from "@/src/services/format/price";
 import { productRepository } from "@/src/services/products/repository";
 
@@ -41,8 +41,7 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
 
   const suggestedPackageAccessories =
     product.kind === "main"
-      ? getAccessorySuggestions(product, productRepository.getAccessories())
-          .filter((item) => item.status !== "incompatible")
+      ? generatePackageSuggestions(product, productRepository.getAccessories())
           .slice(0, 2)
       : [];
 
@@ -123,9 +122,20 @@ export default async function ProductDetailsPage({ params }: ProductDetailsPageP
           <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
             {suggestedPackageAccessories.map((item) => (
               <div key={item.product.id} className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{item.product.name}</p>
-                  <p className="text-xs text-slate-500">{item.reason}</p>
+                <div className="flex items-center gap-3">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <Image
+                      src={item.product.image}
+                      alt={item.product.name}
+                      fill
+                      sizes="64px"
+                      className="object-contain p-1.5"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">{item.product.name}</p>
+                    <p className="text-xs text-slate-500">{item.reason}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-slate-900">

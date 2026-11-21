@@ -33,7 +33,7 @@ export default function Home() {
           <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-600">
             <li>Velg bruksområde, miljø og bruksintensitet.</li>
             <li>Prioriter hva som er viktigst for deg.</li>
-            <li>Få hovedanbefaling, alternativer og relevant tilbehør.</li>
+            <li>Få én hovedanbefaling med relevant kabelsett og festebrakketter.</li>
           </ol>
         </Section>
 
@@ -43,7 +43,7 @@ export default function Home() {
         >
           <ul className="list-disc space-y-2 pl-5 text-sm text-slate-600">
             <li>Én hovedanbefaling med begrunnelse.</li>
-            <li>Alternative valg for ulike behov.</li>
+            <li>En komplett pakke som kan tilpasses før kjøp.</li>
             <li>Direktelenke til produktdetaljene hos JDD Utstyr.</li>
           </ul>
         </Section>

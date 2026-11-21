@@ -5,10 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AddToCartButton } from "@/src/components/cart/add-to-cart-button";
 import { AccessoryCard } from "@/src/components/recommendations/accessory-card";
 import { RecommendationCard } from "@/src/components/recommendations/recommendation-card";
-import { ProductCard } from "@/src/components/products/product-card";
 import { Section } from "@/src/components/ui/section";
 import { addToCart } from "@/src/services/cart/session";
-import { buildPackageSummary, getAccessorySuggestions } from "@/src/services/compatibility/accessories";
+import { buildPackageSummary, generatePackageSuggestions } from "@/src/services/compatibility/accessories";
 import { formatNok } from "@/src/services/format/price";
 import { clearGuideAnswers, loadGuideAnswers } from "@/src/services/guide/session";
 import { productRepository } from "@/src/services/products/repository";
@@ -40,12 +39,17 @@ function priorityLabel(value?: Priority): string {
 
 export default function ResultsPage() {
   const products = productRepository.getMainProducts();
-  const accessories = productRepository.getAccessories().filter((item) => !item.isDemo);
+  const accessories = useMemo(
+    () => productRepository.getAccessories().filter((item) => !item.isDemo),
+    [],
+  );
   const [answers, setAnswers] = useState<GuideAnswers>({});
   const [selectedAccessoryIds, setSelectedAccessoryIds] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const [aiRecommendation, setAiRecommendation] = useState<AiRecommendationResponse | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
+  const [isRecommendationSettled, setIsRecommendationSettled] = useState(false);
+  const [packageAdded, setPackageAdded] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -72,6 +76,8 @@ export default function ResultsPage() {
     const hasInput = !!answersForRecommendation.productIntentText?.trim();
 
     if (!hasInput) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsRecommendationSettled(true);
       return;
     }
 
@@ -79,6 +85,7 @@ export default function ResultsPage() {
 
     async function runAiRecommendation() {
       setIsAnalysing(true);
+      setIsRecommendationSettled(false);
 
       try {
         const response = await fetch("/api/guide-recommendation", {
@@ -98,6 +105,7 @@ export default function ResultsPage() {
       } finally {
         if (!cancelled) {
           setIsAnalysing(false);
+          setIsRecommendationSettled(true);
         }
       }
     }
@@ -140,9 +148,13 @@ export default function ResultsPage() {
     };
   }, [bestProduct, ranking.allRanked]);
 
-  const accessorySuggestions = bestProduct
-    ? getAccessorySuggestions(bestProduct, accessories)
-    : [];
+  const packageOfferSuggestions = useMemo(
+    () =>
+      bestProduct
+        ? generatePackageSuggestions(bestProduct, accessories).slice(0, 2)
+        : [],
+    [bestProduct, accessories],
+  );
 
   const selectedAccessories = accessories.filter((item) =>
     selectedAccessoryIds.includes(item.id),
@@ -151,6 +163,12 @@ export default function ResultsPage() {
   const packageSummary = bestProduct
     ? buildPackageSummary(bestProduct, selectedAccessories)
     : null;
+
+  useEffect(() => {
+    if (!isHydrated || !isRecommendationSettled || !bestProduct) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedAccessoryIds(packageOfferSuggestions.map((suggestion) => suggestion.product.id));
+  }, [bestProduct, isHydrated, isRecommendationSettled, packageOfferSuggestions]);
 
   function toggleAccessory(productId: string) {
     setSelectedAccessoryIds((prev) => {
@@ -169,6 +187,14 @@ export default function ResultsPage() {
     selectedAccessories.forEach((item) =>
       addToCart(item.id, 1, { source: "guide", suppressPackageOffer: true }),
     );
+    setPackageAdded(true);
+  }
+
+  function addProductOnlyToCart() {
+    if (!bestProduct) return;
+
+    addToCart(bestProduct.id, 1, { source: "guide", suppressPackageOffer: true });
+    setPackageAdded(true);
   }
 
   function restartGuide() {
@@ -310,53 +336,19 @@ export default function ResultsPage() {
               Gå til handlekurv
             </Link>
           </div>
-
-          <Section
-            title="Alternative produkter"
-            description="Hele kortet er klikkbart for å se detaljer."
-          >
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {ranking.alternatives.length > 0 ? (
-                ranking.alternatives.map((alternative, index) => {
-                  const product = productRepository.getById(alternative.productId);
-                  if (!product) {
-                    return null;
-                  }
-
-                  const label =
-                    answers.valuePreference === "cheapest"
-                      ? index === 0
-                        ? "Alternativ: nest billigste match"
-                        : index === 1
-                          ? "Alternativ: bedre kapasitet"
-                          : "Alternativ: mer robust"
-                      : answers.valuePreference === "best"
-                        ? index === 0
-                          ? "Alternativ: høy ytelse"
-                          : index === 1
-                            ? "Alternativ: lavere pris"
-                            : "Alternativ: fleksibelt valg"
-                        : index === 0
-                          ? "Alternativ: beste totalvalg"
-                          : index === 1
-                            ? "Alternativ: budsjettfokus"
-                            : "Alternativ: intensiv bruk";
-
-                  return <ProductCard key={product.id} product={product} label={label} />;
-                })
-              ) : (
-                <p className="text-sm text-slate-600">Ingen alternativer tilgjengelig.</p>
-              )}
-            </div>
-          </Section>
+          {packageAdded ? (
+            <p className="text-sm font-medium text-emerald-700" role="status">
+              Anbefalingen og valgt tilbehør er lagt i handlekurven.
+            </p>
+          ) : null}
 
           <Section
             title="Pakketilbud"
-            description="Velg tilbehør som passer anbefalingen, og legg hele pakken i handlekurven."
+            description="Anbefalingen består av hovedproduktet og tilbehøret som trengs. Fjern det tilbehøret du ikke trenger."
           >
             <div className="grid gap-4 lg:grid-cols-2">
-              {accessorySuggestions.length > 0 ? (
-                accessorySuggestions.map((suggestion) => (
+              {packageOfferSuggestions.length > 0 ? (
+                packageOfferSuggestions.map((suggestion) => (
                   <AccessoryCard
                     key={suggestion.product.id}
                     suggestion={suggestion}
@@ -371,7 +363,7 @@ export default function ResultsPage() {
               )}
             </div>
 
-            {packageSummary && selectedAccessories.length > 0 ? (
+            {packageSummary ? (
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[340px] border-collapse text-sm">
@@ -416,7 +408,14 @@ export default function ResultsPage() {
                   onClick={addPackageToCart}
                   className="mt-4 rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
                 >
-                  Legg pakketilbud i handlekurv
+                  Legg pakken i handlekurven
+                </button>
+                <button
+                  type="button"
+                  onClick={addProductOnlyToCart}
+                  className="mt-4 ml-3 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Legg kun hovedproduktet i handlekurven
                 </button>
               </div>
             ) : null}
